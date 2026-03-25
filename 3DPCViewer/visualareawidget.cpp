@@ -147,6 +147,15 @@ void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
 
 void VisualAreaWidget::onShowNormalsRequested(const bool& show) {
 	//显示法线操作
+	if (!show) {
+		m_viewer->removePointCloud(m_normalsId.toStdString());
+		m_vtkWidget->renderWindow()->Render();
+		return;
+	}
+	if (!m_cloud2show || m_cloud2show->empty()) return;
+	if (m_normalWatcher.isRunning()) return;
+	QFuture<pcl::PointCloud<pcl::Normal>::Ptr> future = QtConcurrent::run(computeNormalsThread, m_cloud2show);
+	m_normalWatcher.setFuture(future);
 }
 
 void VisualAreaWidget::onPointCloudLoaded() {
@@ -177,5 +186,23 @@ void VisualAreaWidget::onCloudSampled() {
 }
 
 void VisualAreaWidget::onNormalsComputed() {
+	pcl::PointCloud<pcl::Normal>::Ptr normals = m_normalWatcher.result();
 
+	if (!normals || normals->empty()) {
+		std::cout << "Normals computation failed or empty." << std::endl;
+		return;
+	}
+
+	// 2. 为了防止重复添加导致错误，先尝试移除旧的法线
+	m_viewer->removePointCloud(m_normalsId.toStdString());
+
+	// 3. 将法线添加到视口中
+	// 参数说明：原始点云, 法线点云, 显示步长(每10个点显1个), 法线长度, ID
+	m_viewer->addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(
+		m_cloud, normals, 10, 0.05, m_normalsId.toStdString()
+	);
+
+	// 4. 通知渲染窗口刷新画面
+	m_vtkWidget->renderWindow()->Render();
+	std::cout << "Normals visualization updated." << std::endl;
 }
