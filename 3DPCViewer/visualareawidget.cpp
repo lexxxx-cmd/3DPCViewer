@@ -88,14 +88,36 @@ void VisualAreaWidget::onChangeSizeRequested(const int& size) {
     }
 }
 
+// C++
 void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
-    if (m_cloudGeom.valid()) {
-        osg::StateSet* state = m_cloudGeom->getOrCreateStateSet();
-        // 开启混合
-        state->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+    if (!m_cloudGeom.valid()) return;
+
+    // 1. 将输入值（假设 0-100）转换为 0.0-1.0 的浮点数
+    float alpha = std::clamp(static_cast<float>(opacity) / 100.0f, 0.0f, 1.0f);
+
+    // 2. 配置渲染状态：开启混合和透明队列
+    osg::StateSet* state = m_cloudGeom->getOrCreateStateSet();
+    if (alpha < 1.0f) {
+        state->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::ON);
         state->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-        // 注意：OSG点云透明度通常需修改ColorArray的Alpha通道，此处简化逻辑
+    } else {
+        state->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::OFF);
+        state->setRenderingHint(osg::StateSet::DEFAULT_BIN);
     }
+
+    // 3. 修改颜色数组的 Alpha 通道
+    osg::Array* colorArray = m_cloudGeom->getColorArray();
+    if (auto* colors = dynamic_cast<osg::Vec4Array*>(colorArray)) {
+        for (unsigned int i = 0; i < colors->size(); ++i) {
+            (*colors)[i].a() = alpha;
+        }
+        colors->dirty();
+        m_cloudGeom->dirtyDisplayList();
+        m_cloudGeom->dirtyBound();
+    }
+
+    // 4. 触发窗口重绘
+    m_osgWidget->update();
 }
 
 void VisualAreaWidget::onShowNormalsRequested(const bool& show) {
