@@ -7,7 +7,7 @@ include(qt.cmake)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core )
+find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core )
 find_package(Qt${QT_VERSION_MAJOR}
     COMPONENTS
         Core
@@ -16,13 +16,12 @@ find_package(Qt${QT_VERSION_MAJOR}
         Concurrent
 )
 qt_standard_project_setup()
+find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil osgQt)
 
-find_package(VTK REQUIRED) 
-find_package(PCL CONFIG REQUIRED)
+
 
 include_directories(
-    ${PCL_INCLUDE_DIRS}
-    ${VTK_INCLUDE_DIRS}
+    ${OPENSCENEGRAPH_INCLUDE_DIRS}
 )
 
 set(PROJECT_UI_SOURCES
@@ -68,6 +67,8 @@ set(PROJECT_SOURCES
     ${PROJECT_INTERACT_SOURCES}
     ${PROJECT_CONGTRAL_SOURCES}
     ${PROJECT_VISUAL_SOURCES}
+    DataLoader.h
+    CloudData.h
     3DPCViewer.rc
 )
 
@@ -84,14 +85,8 @@ target_link_libraries(${PROJECT_NAME}
         Qt::Gui
         Qt::Widgets
         Qt::Concurrent
-   PRIVATE
-        ${VTK_LIBRARIES} 
-        ${PCL_LIBRARIES}
-)
+        ${OPENSCENEGRAPH_LIBRARIES}
 
-vtk_module_autoinit(
-    TARGETS ${PROJECT_NAME}
-    MODULES ${VTK_LIBRARIES}
 )
 
 

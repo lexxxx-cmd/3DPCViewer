@@ -1,64 +1,50 @@
-#pragma once
+// 3. visualareawidget.h
+#ifndef VISUALAREAWIDGET_H
+#define VISUALAREAWIDGET_H
 
 #include <QWidget>
-#include <memory>
-#include <vtkGenericOpenGLRenderWindow.h>
-#include <QVTKOpenGLNativeWidget.h>
-#include <vtkSmartPointer.h>
-#include <vtkRenderer.h>
-#include <vtkRenderWindow.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include "ui_visualareawidget.h"
-
+#include <osgQOpenGL/osgQOpenGLWidget>
+#include <osgViewer/Viewer>
+#include <osgGA/TrackballManipulator>
+#include <osg/Group>
+#include <osg/Geometry>
+#include <osg/Point>
 #include <QFutureWatcher>
-#include <QtConcurrent/QtConcurrent>
 
-QT_BEGIN_NAMESPACE
-namespace Ui { class VisualAreaWidgetClass; };
-QT_END_NAMESPACE
+#include "CloudData.h"
 
-class VisualAreaWidget : public QWidget
-{
-	Q_OBJECT
+namespace Ui { class VisualAreaWidgetClass; }
 
+class VisualAreaWidget : public QWidget {
+    Q_OBJECT
 public:
-	VisualAreaWidget(QWidget *parent = nullptr);
-	~VisualAreaWidget();
+    VisualAreaWidget(QWidget* parent = nullptr);
+    ~VisualAreaWidget();
+
 public slots:
-	void onOpenFileRequested(const QString& path); // 接收上层：用户选了文件
-	void onChangeSizeRequested(const int& size); // 接收上层：用户改了点大小
-	void onChangeOpacityRequested(const int& opacity); // 接收上层：用户改了点透明度
-	void onShowNormalsRequested(const bool& show);
-	void onUpdateDisplayCloud(float leafSize);
-
-
-private slots:
-	// 响应点云/法线在子线程处理完成的信号
-	void onPointCloudLoaded();
-	void onNormalsComputed();
-	void onCloudSampled();
+    void onOpenFileRequested(const QString& path);
+    void onChangeSizeRequested(const int& size);
+    void onChangeOpacityRequested(const int& opacity);
+    void onShowNormalsRequested(const bool& show);
 
 signals:
-	void sendFileSize(int size);
-	void sendPointSize(int num);
-	void sendFPS(int fps);
+    void sendFileSize(int size);
+    void sendPointSize(int num);
+
+private slots:
+    void onDataLoaded(); // 异步加载完成后的回调
 
 private:
-	std::unique_ptr<Ui::VisualAreaWidgetClass> ui;
-	QVTKOpenGLNativeWidget* m_vtkWidget;
+    void initOSG();
+    void updateOsgScene(const CloudData& data);
 
-	std::shared_ptr<pcl::visualization::PCLVisualizer> m_viewer;
+    Ui::VisualAreaWidgetClass* ui;
+    osgQOpenGLWidget* m_osgWidget;
 
-	pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud;
-	pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud2show;
-	QString m_cloudId = "cloud_main";
-	QString m_normalsId = "cloud_normals";
+    osg::ref_ptr<osg::Group> m_root;
+    osg::ref_ptr<osg::Geometry> m_cloudGeom;
 
-	// 用于异步监听的 Watcher
-	QFutureWatcher<pcl::PointCloud<pcl::PointXYZ>::Ptr> m_loadWatcher;
-	QFutureWatcher<pcl::PointCloud<pcl::PointXYZ>::Ptr> m_sampleWatcher;
-	QFutureWatcher<pcl::PointCloud<pcl::Normal>::Ptr> m_normalWatcher;
+    QFutureWatcher<CloudData> m_loadWatcher;
 };
 
+#endif

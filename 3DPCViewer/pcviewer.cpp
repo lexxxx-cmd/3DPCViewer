@@ -13,7 +13,7 @@ PCViewer::PCViewer(QWidget *parent)
 
     connect(ui->ShowWidget, &VisualAreaWidget::sendFileSize, ui->ControlWidget, &ControlPanelWidget::onFileSizeUpdated);
     connect(ui->ShowWidget, &VisualAreaWidget::sendPointSize, ui->ControlWidget, &ControlPanelWidget::onPointSizeUpdated);
-    connect(ui->ShowWidget, &VisualAreaWidget::sendFPS, ui->ControlWidget, &ControlPanelWidget::onFPSUpdated);
+    //connect(ui->ShowWidget, &VisualAreaWidget::sendFPS, ui->ControlWidget, &ControlPanelWidget::onFPSUpdated);
 }
 
 PCViewer::~PCViewer() = default;
