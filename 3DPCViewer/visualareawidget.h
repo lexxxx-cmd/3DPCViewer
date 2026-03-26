@@ -43,6 +43,7 @@ private:
 
     osg::ref_ptr<osg::Group> m_root;
     osg::ref_ptr<osg::Geometry> m_cloudGeom;
+    osg::ref_ptr<osg::Geometry> m_cloudNormalGeom;
 
     QFutureWatcher<CloudData> m_loadWatcher;
 };

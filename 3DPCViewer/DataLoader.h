@@ -9,6 +9,17 @@
 #include <QFileInfo>
 #include <fstream>
 #include <sstream>
+#include <iostream>
+#include <string>
+#include <algorithm>
+
+// PCL 相关头文件
+#include <pcl/PCLPointCloud2.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
+#include <pcl/io/obj_io.h>
+#include <pcl/PolygonMesh.h>
+#include <pcl/console/print.h>
 
 class DataLoader {
 public:

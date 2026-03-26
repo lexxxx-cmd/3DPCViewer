@@ -16,12 +16,15 @@ find_package(Qt${QT_VERSION_MAJOR}
         Concurrent
 )
 qt_standard_project_setup()
+
+find_package(PCL REQUIRED)
 find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil osgQt)
 
 
 
 include_directories(
     ${OPENSCENEGRAPH_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
 )
 
 set(PROJECT_UI_SOURCES
@@ -86,6 +89,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt::Widgets
         Qt::Concurrent
         ${OPENSCENEGRAPH_LIBRARIES}
+        ${PCL_LIBRARIES}
 
 )
 

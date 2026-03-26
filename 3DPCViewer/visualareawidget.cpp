@@ -5,6 +5,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <osg/StateSet>
 #include <osg/BlendFunc>
+#include <osg/BlendColor>
 #include <QVBoxLayout>
 
 VisualAreaWidget::VisualAreaWidget(QWidget* parent) : QWidget(parent), ui(new Ui::VisualAreaWidgetClass) {
@@ -92,36 +93,34 @@ void VisualAreaWidget::onChangeSizeRequested(const int& size) {
 void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
     if (!m_cloudGeom.valid()) return;
 
-    // 1. 将输入值（假设 0-100）转换为 0.0-1.0 的浮点数
-    float alpha = std::clamp(static_cast<float>(opacity) / 100.0f, 0.0f, 1.0f);
-
-    // 2. 配置渲染状态：开启混合和透明队列
+    float alpha = static_cast<float>(opacity) / 100.0f;
     osg::StateSet* state = m_cloudGeom->getOrCreateStateSet();
+
     if (alpha < 1.0f) {
-        state->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::ON);
+        // 1. 设置全局混合常量颜色
+        osg::ref_ptr<osg::BlendColor> bc = new osg::BlendColor(osg::Vec4(1.0, 1.0, 1.0, alpha));
+        state->setAttributeAndModes(bc, osg::StateAttribute::ON);
+
+        // 2. 修改混合函数，使用常量 Alpha (GL_CONSTANT_ALPHA)
+        state->setAttributeAndModes(new osg::BlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA), osg::StateAttribute::ON);
+
         state->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-    } else {
+    }
+    else {
+        // 恢复默认
+        state->removeAttribute(osg::StateAttribute::BLENDCOLOR);
         state->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::OFF);
         state->setRenderingHint(osg::StateSet::DEFAULT_BIN);
     }
-
-    // 3. 修改颜色数组的 Alpha 通道
-    osg::Array* colorArray = m_cloudGeom->getColorArray();
-    if (auto* colors = dynamic_cast<osg::Vec4Array*>(colorArray)) {
-        for (unsigned int i = 0; i < colors->size(); ++i) {
-            (*colors)[i].a() = alpha;
-        }
-        colors->dirty();
-        m_cloudGeom->dirtyDisplayList();
-        m_cloudGeom->dirtyBound();
-    }
-
-    // 4. 触发窗口重绘
     m_osgWidget->update();
 }
 
 void VisualAreaWidget::onShowNormalsRequested(const bool& show) {
     // 逻辑同上，使用 osg::Geometry 绘制线条即可
+    if (m_cloudNormalGeom.valid()) {
+        m_cloudNormalGeom->setNodeMask(show ? 0xffffffff : 0x0);
+        m_osgWidget->update();
+    }
 }
 
 VisualAreaWidget::~VisualAreaWidget() { delete ui; }
