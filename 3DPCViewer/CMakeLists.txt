@@ -71,7 +71,6 @@ set(PROJECT_SOURCES
     ${PROJECT_CONGTRAL_SOURCES}
     ${PROJECT_VISUAL_SOURCES}
     DataLoader.h
-    CloudData.h
     3DPCViewer.rc
 )
 
