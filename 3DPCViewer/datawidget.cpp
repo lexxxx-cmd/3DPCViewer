@@ -8,8 +8,8 @@ DataWidget::DataWidget(QWidget *parent)
 	ui->setupUi(this);
 
 	connect(ui->pB_import_data, &QPushButton::clicked, this, [this]() {
-		QString fileName = QFileDialog::getOpenFileName(this, "Open PointCloud", ".",
-			"Open files(*.pcd *.ply *.obj)");
+		QString fileName = QFileDialog::getOpenFileName(this, "Open File", ".",
+			"Open files(*.bag *.pcd *.ply *.obj)");
 		if (fileName.isEmpty()) return;
 		ui->lbl_filename->setText(fileName);
 		emit requestLoadFile(fileName);

@@ -39,6 +39,9 @@ public:
             pcl::io::loadOBJFile(filename, mesh);
             *cloud = mesh.cloud;
         }
+        else if (extension == "bag") {
+
+        }
         else {
             PCL_ERROR("不支持的文件格式: .%s\n", extension.c_str());
         }
