@@ -27,6 +27,24 @@ include_directories(
     ${PCL_INCLUDE_DIRS}
 )
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/ros1bag_reader)
+
+set(ROSBAG_READER_SOURCES
+    third_party/ros1bag_reader/core/rosbag.cpp
+    third_party/ros1bag_reader/messages/std_msgs.cpp
+    third_party/ros1bag_reader/messages/sensor_msgs.cpp
+)
+
+set(THIRD_PARTY_SOURCE
+    ${ROSBAG_READER_SOURCES}
+    )
+
+set(ROSBAG_FOURCE
+    BagWorker.h
+    BagWorker.cpp
+    BagDataTypes.h
+)
+
 set(PROJECT_UI_SOURCES
     pcviewer.ui
     pcviewer.h
@@ -72,6 +90,8 @@ set(PROJECT_SOURCES
     ${PROJECT_VISUAL_SOURCES}
     DataLoader.h
     3DPCViewer.rc
+    ${THIRD_PARTY_SOURCE}
+    ${ROSBAG_FOURCE}
 )
 
 qt_add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})

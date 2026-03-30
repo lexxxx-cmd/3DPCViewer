@@ -1,0 +1,105 @@
+// MIT License
+
+// Copyright (c) 2024 Saurabh Gupta
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+#pragma once
+
+#include <fstream>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+#include <cstdint>
+
+#include "messages/messages.h"
+
+struct ChunkInfo {
+    int64_t chunk_pos{};
+    int64_t start_time{};
+    int64_t end_time{};
+    int64_t num_msgs{};
+    int conn_count{};
+};
+
+struct MesssageDataInfo {
+    int64_t buffer_offset{};
+    int conn_id{};
+    int64_t time{};
+
+    int data_len{};// 记录数据长度，便于后续读取数据
+};
+
+struct ConnectionInfo {
+    std::string msg_type;
+    std::string topic_name;
+    int num_msgs{};
+    std::vector<MesssageDataInfo> messages_info;
+};
+
+class Rosbag {
+    using Connection = std::map<int, ConnectionInfo>;
+    using FieldValMap =
+            std::map<std::string, std::pair<std::shared_ptr<char[]>, int>>;
+
+public:
+    Rosbag(const std::string &rosbag_path);
+    void printInfo() const;
+    void printAvailableTopics() const;
+    void saveDataOnTopic(const std::string &topic_name,
+                         const std::string &output_path);
+
+    std::vector<std::vector<uint8_t>> getRawPayloads(const std::string& topic_name);// 提取topic原始二进制
+
+private:
+    void readString(std::string &str, int n_bytes);
+    std::tuple<std::string, std::string> readStringField(int &header_len);
+    FieldValMap readRecordHeader();
+    void readBagHeaderRecord();
+    void readChunkRecord(int64_t num_of_msgs);
+    void readConnectionRecord();
+    void readMessageDataRecord();
+    void readChunkInfoRecord();
+
+    void readData();
+    void readBagInfo();
+    void savePointCloud2AsPLY(
+            const std::vector<MesssageDataInfo> &messages_info,
+            const std::string &output_path);
+    void saveLaserScanAsPLY(const std::vector<MesssageDataInfo> &messages_info,
+                            const std::string &output_path);
+
+private:
+    std::string rosbag_path_;
+    std::ifstream rosbag_;
+
+    std::string version_;
+
+    int64_t index_pos_{};
+    int num_unique_conns_{};
+    int num_chunk_records_{};
+
+    FieldValMap fields_;
+
+    Connection connections_;
+    std::map<std::string, int> topic_to_conn_id_;
+    std::vector<std::string> chunk_compression_types_;
+    std::vector<ChunkInfo> chunk_info_records_;
+};

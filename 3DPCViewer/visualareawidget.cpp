@@ -167,3 +167,11 @@ void VisualAreaWidget::onShowNormalsRequested(const bool& show) {
 VisualAreaWidget::~VisualAreaWidget() {
     delete ui;
 }
+
+void VisualAreaWidget::onCloudFrameReady(const LivoxCloudFrame& frame) {
+    osg::ref_ptr<osg::Geometry> geom = DataLoader::convertToOsgGeometry(frame);
+    updateCloudGeometry(geom, true);
+    std::cout << "Received cloud frame with " << frame.points.size() << " points.";
+    emit sendPointSize(frame.points.size());
+
+}

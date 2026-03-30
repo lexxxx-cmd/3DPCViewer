@@ -19,6 +19,8 @@
 #include <pcl/search/kdtree.h>
 #include <pcl/console/print.h>
 
+#include "BagDataTypes.h"
+
 class DataLoader {
 public:
     // Í¨ÓÃ¶ÁÈ¡
@@ -78,6 +80,43 @@ public:
             pcl::fromPCLPointCloud2(*cloud2, cloud);
             vertices->reserve(cloud.size());
             for (const auto& pt : cloud.points) {
+                vertices->push_back(osg::Vec3(pt.x, pt.y, pt.z));
+            }
+            colors->push_back(osg::Vec4(0.0f, 1.0f, 1.0f, 1.0f));
+            geom->setColorArray(colors, osg::Array::BIND_OVERALL);
+        }
+
+        geom->setVertexArray(vertices);
+        geom->addPrimitiveSet(new osg::DrawArrays(GL_POINTS, 0, vertices->size()));
+        return geom;
+    }
+    static osg::ref_ptr<osg::Geometry> convertToOsgGeometry(const LivoxCloudFrame& cloud2) {
+        osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
+        if (cloud2.points.empty()) return geom;
+
+        // RGB
+        bool has_rgb = false;
+        for (const auto& field : cloud2.points) {
+            if (field.reflectivity) { has_rgb = true; break; }
+        }
+
+        osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array();
+        osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array();
+
+        if (has_rgb) {
+            pcl::PointCloud<pcl::PointXYZRGB> cloud;
+            vertices->reserve(cloud2.points.size());
+            colors->reserve(cloud2.points.size());
+            for (const auto& pt : cloud2.points) {
+                vertices->push_back(osg::Vec3(pt.x, pt.y, pt.z));
+                colors->push_back(osg::Vec4(pt.reflectivity / 255.0f, pt.reflectivity / 255.0f, pt.reflectivity / 255.0f, 1.0f));
+            }
+            geom->setColorArray(colors, osg::Array::BIND_PER_VERTEX);
+        }
+        else {
+            pcl::PointCloud<pcl::PointXYZ> cloud;
+            vertices->reserve(cloud2.points.size());
+            for (const auto& pt : cloud2.points) {
                 vertices->push_back(osg::Vec3(pt.x, pt.y, pt.z));
             }
             colors->push_back(osg::Vec4(0.0f, 1.0f, 1.0f, 1.0f));

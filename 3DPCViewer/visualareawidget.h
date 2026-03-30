@@ -12,6 +12,7 @@
 #include <QFutureWatcher>
 
 #include <pcl/PCLPointCloud2.h>
+#include "BagDataTypes.h"
 
 namespace Ui { class VisualAreaWidgetClass; }
 
@@ -26,6 +27,8 @@ public slots:
     void onChangeSizeRequested(const int& size);
     void onChangeOpacityRequested(const int& opacity);
     void onShowNormalsRequested(const bool& show);
+
+    void onCloudFrameReady(const LivoxCloudFrame& frame);
 
 signals:
     void sendFileSize(int size);
@@ -50,6 +53,9 @@ private:
 
     osg::ref_ptr<osg::Geometry> m_cloudGeom;
     osg::ref_ptr<osg::Geometry> m_cloudNormalGeom;
+
+    osg::ref_ptr<osg::Geometry> m_cloudROSGeometry;
+    osg::ref_ptr<osg::Geode> m_cloudROSGeode;
 
     pcl::PCLPointCloud2::Ptr m_currentCloud;
 

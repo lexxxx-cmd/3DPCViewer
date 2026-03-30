@@ -14,6 +14,13 @@ DataWidget::DataWidget(QWidget *parent)
 		ui->lbl_filename->setText(fileName);
 		emit requestLoadFile(fileName);
 	});
+	connect(ui->pB_import_bag, &QPushButton::clicked, this, [this]() {
+		QString fileName = QFileDialog::getOpenFileName(this, "Open File", ".",
+			"Open files(*.bag)");
+		if (fileName.isEmpty()) return;
+		ui->lbl_filename->setText(fileName);
+		emit requestProcBag(fileName);
+		});
 }
 
 DataWidget::~DataWidget() = default;
