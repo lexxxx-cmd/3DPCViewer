@@ -7,7 +7,7 @@ include(qt.cmake)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core )
+find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core )
 find_package(Qt${QT_VERSION_MAJOR}
     COMPONENTS
         Core
@@ -17,12 +17,32 @@ find_package(Qt${QT_VERSION_MAJOR}
 )
 qt_standard_project_setup()
 
-find_package(VTK REQUIRED) 
-find_package(PCL CONFIG REQUIRED)
+find_package(PCL REQUIRED)
+find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil osgQt)
+
+
 
 include_directories(
+    ${OPENSCENEGRAPH_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
-    ${VTK_INCLUDE_DIRS}
+)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/ros1bag_reader)
+
+set(ROSBAG_READER_SOURCES
+    third_party/ros1bag_reader/core/rosbag.cpp
+    third_party/ros1bag_reader/messages/std_msgs.cpp
+    third_party/ros1bag_reader/messages/sensor_msgs.cpp
+)
+
+set(THIRD_PARTY_SOURCE
+    ${ROSBAG_READER_SOURCES}
+    )
+
+set(ROSBAG_FOURCE
+    BagWorker.h
+    BagWorker.cpp
+    BagDataTypes.h
 )
 
 set(PROJECT_UI_SOURCES
@@ -68,7 +88,10 @@ set(PROJECT_SOURCES
     ${PROJECT_INTERACT_SOURCES}
     ${PROJECT_CONGTRAL_SOURCES}
     ${PROJECT_VISUAL_SOURCES}
+    DataLoader.h
     3DPCViewer.rc
+    ${THIRD_PARTY_SOURCE}
+    ${ROSBAG_FOURCE}
 )
 
 qt_add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
@@ -84,14 +107,9 @@ target_link_libraries(${PROJECT_NAME}
         Qt::Gui
         Qt::Widgets
         Qt::Concurrent
-   PRIVATE
-        ${VTK_LIBRARIES} 
+        ${OPENSCENEGRAPH_LIBRARIES}
         ${PCL_LIBRARIES}
-)
 
-vtk_module_autoinit(
-    TARGETS ${PROJECT_NAME}
-    MODULES ${VTK_LIBRARIES}
 )
 
 

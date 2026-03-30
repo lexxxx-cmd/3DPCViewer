@@ -44,7 +44,7 @@ Generated\ Files/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
-
+data/*
 # NUnit
 *.VisualState.xml
 TestResult.xml
@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/CMakeUserPresets.json
+/data/bunny/bunny/data
+/data/bunny/bunny/reconstruction

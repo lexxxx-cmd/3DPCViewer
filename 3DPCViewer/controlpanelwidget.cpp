@@ -9,6 +9,9 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 	connect(ui->DataW, &DataWidget::requestLoadFile, this, [this](const QString& path) {
 		emit requestLoadFile(path);
 	});
+	connect(ui->DataW, &DataWidget::requestProcBag, this, [this](const QString& path) {
+		emit requestProcBag(path);
+		});
 	connect(ui->InterWidget, &InteractionWidget::pointSizeChanged, this, [this](const int& value) {
 		emit pointSizeChanged(value);
 		});
