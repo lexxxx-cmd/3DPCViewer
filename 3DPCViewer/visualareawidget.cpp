@@ -22,8 +22,16 @@ VisualAreaWidget::VisualAreaWidget(QWidget* parent) : QWidget(parent), ui(new Ui
 }
 
 void VisualAreaWidget::initOSG() {
+    //位姿节点
+    _camViz = std::make_unique<OdomCameraVisualizer>();
+    _pathViz = std::make_unique<OdomPathVisualizer>();
+
     m_root = new osg::Group();
     osgViewer::Viewer* viewer = m_osgWidget->getOsgViewer();
+
+    m_root->addChild(_camViz->getRootNode());
+    m_root->addChild(_pathViz->getNode());
+
     viewer->setSceneData(m_root);
     viewer->setCameraManipulator(new osgGA::TrackballManipulator);
     viewer->getCamera()->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 1.0));
@@ -174,4 +182,19 @@ void VisualAreaWidget::onCloudFrameReady(const LivoxCloudFrame& frame) {
     std::cout << "Received cloud frame with " << frame.points.size() << " points.";
     emit sendPointSize(frame.points.size());
 
+}
+
+void VisualAreaWidget::onOdomFrameReady(const OdomFrame& frame) {
+    if (_camViz)
+    {
+        // 更新 OSG 节点
+        _camViz->updatePose(frame.pose.x,frame.pose.y,frame.pose.z,
+            frame.pose.qx,frame.pose.qy,frame.pose.qz,frame.pose.qw);
+    }
+
+    if (_pathViz)
+    {
+        _pathViz->updatePose(frame.pose.x, frame.pose.y, frame.pose.z);
+    }
+    m_osgWidget->update();
 }

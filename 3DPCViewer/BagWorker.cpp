@@ -18,8 +18,9 @@ void BagWorker::processBag(const QString& bagPath) {
     // 2. 拿到纯粹的二进制大数组
     auto livox_payloads = bag.getRawPayloads("/livox/lidar");
     auto image_payloads = bag.getRawPayloads("/usb_cam/image_raw/compressed");
+    auto odometry_payloads = bag.getRawPayloads("/aft_mapped_to_init");
 
-    int totalFrames = livox_payloads.size();
+    int totalFrames = odometry_payloads.size();
     if (totalFrames == 0) {
         emit finished();
         return;
@@ -30,9 +31,9 @@ void BagWorker::processBag(const QString& bagPath) {
         if (m_stopFlag) break;
 
         // --- 解析 Livox 点云 ---
-        const auto& cloud_payload = livox_payloads[i];
-        LivoxCloudFrame cloudFrame = parseLivoxPayload(cloud_payload.data(), cloud_payload.size());
-        emit cloudFrameReady(cloudFrame);
+        //const auto& cloud_payload = livox_payloads[i];
+        //LivoxCloudFrame cloudFrame = parseLivoxPayload(cloud_payload.data(), cloud_payload.size());
+        //emit cloudFrameReady(cloudFrame);
 
         // --- 解析对应的图像 (为了演示，假设图像和点云数量一致或近似) ---
         //if (i < image_payloads.size()) {
@@ -40,10 +41,15 @@ void BagWorker::processBag(const QString& bagPath) {
         //    ImageFrame imgFrame = parseImagePayload(img_payload.data(), img_payload.size());
         //    emit imageFrameReady(imgFrame);
         //}
+        if (i < odometry_payloads.size()) {
+            const auto& odom_payload = odometry_payloads[i];
+            OdomFrame odomFrame = parseOdomPayload(odom_payload.data(), odom_payload.size());
+            emit odomFrameReady(odomFrame);
+        }
 
         emit progressUpdated((i * 100) / totalFrames);
 
-        // 控制播放帧率，比如 10Hz (100ms)
+        // 控制播放帧率
         QThread::msleep(100);
     }
 
@@ -105,4 +111,53 @@ ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
     frame.image.loadFromData(payload + offset, data_len);
 
     return frame;
+}
+
+OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
+    OdomFrame odom;
+    size_t offset = 0;
+
+    uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
+    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec; // 合成纳秒级时间戳
+
+    uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
+    odom.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+    offset += frame_id_len;
+
+    uint32_t child_frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
+    odom.child_frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+    offset += child_frame_id_len;
+
+    odom.pose.x = *(double*)(payload + offset); offset += 8;
+    odom.pose.y = *(double*)(payload + offset); offset += 8;
+    odom.pose.z = *(double*)(payload + offset); offset += 8;
+    
+    odom.pose.qx = *(double*)(payload + offset); offset += 8;
+    odom.pose.qy = *(double*)(payload + offset); offset += 8;
+    odom.pose.qz = *(double*)(payload + offset); offset += 8;
+    odom.pose.qw = *(double*)(payload + offset); offset += 8;
+
+    offset += (36 * 8);
+
+    odom.twist.linear_x = *(double*)(payload + offset); offset += 8;
+    odom.twist.linear_y = *(double*)(payload + offset); offset += 8;
+    odom.twist.linear_z = *(double*)(payload + offset); offset += 8;
+
+
+    odom.twist.angular_x = *(double*)(payload + offset); offset += 8;
+    odom.twist.angular_y = *(double*)(payload + offset); offset += 8;
+    odom.twist.angular_z = *(double*)(payload + offset); offset += 8;
+
+    // 跳过 Twist 的协方差矩阵 (36 * 8 字节)
+    offset += (36 * 8);
+
+    // 越界检查
+    if (offset > length) {
+        qWarning() << "Odometry 数据解析越界，可能数据包不完整！";
+    }
+
+
+    return odom;
 }

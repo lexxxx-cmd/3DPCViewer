@@ -13,6 +13,8 @@
 
 #include <pcl/PCLPointCloud2.h>
 #include "BagDataTypes.h"
+#include "OdomCameraVisualizer.h"
+#include "OdomPathVisualizer.h"
 
 namespace Ui { class VisualAreaWidgetClass; }
 
@@ -29,6 +31,7 @@ public slots:
     void onShowNormalsRequested(const bool& show);
 
     void onCloudFrameReady(const LivoxCloudFrame& frame);
+    void onOdomFrameReady(const OdomFrame& frame);
 
 signals:
     void sendFileSize(int size);
@@ -64,6 +67,8 @@ private:
     QFutureWatcher<osg::ref_ptr<osg::Geometry>> m_normalWatcher;
 
     // »º´æµ±Ç°×´Ì¬£¬±ãÓÚÔÚÌæ»» Geometry Ê±»Ö¸´
+    std::unique_ptr<OdomCameraVisualizer> _camViz;
+    std::unique_ptr<OdomPathVisualizer> _pathViz;
     int m_currentPointSize = 2;
     int m_currentOpacity = 100;
     bool m_showNormals = false;

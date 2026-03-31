@@ -43,6 +43,8 @@ set(ROSBAG_FOURCE
     BagWorker.h
     BagWorker.cpp
     BagDataTypes.h
+    OdomCameraVisualizer.h
+    OdomPathVisualizer.h
 )
 
 set(PROJECT_UI_SOURCES

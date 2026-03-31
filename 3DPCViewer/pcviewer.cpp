@@ -16,6 +16,8 @@ PCViewer::PCViewer(QWidget *parent)
     connect(ui->ControlWidget, &ControlPanelWidget::requestProcBag, worker, &BagWorker::processBag);
     connect(worker, &BagWorker::cloudFrameReady,
         ui->ShowWidget, &VisualAreaWidget::onCloudFrameReady);
+    connect(worker, &BagWorker::odomFrameReady,
+        ui->ShowWidget, &VisualAreaWidget::onOdomFrameReady);
 
     //connect(worker, &BagWorker::imageFrameReady,
     //    ui->dataWidget, &DataWidget::onImageFrameReady);

@@ -8,6 +8,7 @@ int main(int argc, char *argv[])
 
     qRegisterMetaType<LivoxCloudFrame>("LivoxCloudFrame");
     qRegisterMetaType<ImageFrame>("ImageFrame");
+    qRegisterMetaType<OdomFrame>("OdomFrame");
 
     PCViewer window;
     window.show();

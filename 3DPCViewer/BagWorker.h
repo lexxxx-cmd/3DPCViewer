@@ -24,6 +24,7 @@ signals:
     // 将解析好的数据抛给前端
     void cloudFrameReady(const LivoxCloudFrame& frame);
     void imageFrameReady(const ImageFrame& frame);
+    void odomFrameReady(const OdomFrame& frame);
     void progressUpdated(int percent);
 
     // 任务结束信号
@@ -35,4 +36,5 @@ private:
     // 二进制剥离核心算法
     LivoxCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
     ImageFrame parseImagePayload(const uint8_t* payload, size_t length);
+    OdomFrame parseOdomPayload(const uint8_t* payload, size_t length);
 };

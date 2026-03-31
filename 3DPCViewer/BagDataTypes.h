@@ -31,6 +31,27 @@ struct ImageFrame {
     QImage image;
 };
 
+struct Pose {
+    double x, y, z;          // 位置
+    double qx, qy, qz, qw;   // 四元数姿态
+};
+
+// 速度信息
+struct Twist {
+    double linear_x, linear_y, linear_z;
+    double angular_x, angular_y, angular_z;
+};
+
+// 传给前端的一帧里程计数据
+struct OdomFrame {
+    uint64_t timestamp;      // 纳秒级时间戳
+    QString frame_id;
+    QString child_frame_id;
+    Pose pose;
+    Twist twist;
+};
+
 // 注册元类型，允许跨线程信号槽中传递
 Q_DECLARE_METATYPE(LivoxCloudFrame)
 Q_DECLARE_METATYPE(ImageFrame)
+Q_DECLARE_METATYPE(OdomFrame)
