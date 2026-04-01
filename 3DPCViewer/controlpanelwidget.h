@@ -18,11 +18,14 @@ class ControlPanelWidget : public QWidget
 public:
 	ControlPanelWidget(QWidget *parent = nullptr);
 	~ControlPanelWidget();
+	DataWidget* getDataWidget() const { return ui->DataW; }
+	StatusWidget* getStatusWidget() const { return ui->StatusW; }
+	InteractionWidget* getInteractionWidget() const { return ui->InterWidget; }
 
 public slots:
 	void onFileSizeUpdated(const int& size); // 接收上层：文件大小更新了
 	void onPointSizeUpdated(const int& num); // 接收上层：点云数量更新了
-	void onFPSUpdated(const int& fps); // 接收上层：FPS更新了
+
 signals:
 	void requestLoadFile(const QString& path);
 	void requestProcBag(const QString& path);// 通知上层：用户选了文件

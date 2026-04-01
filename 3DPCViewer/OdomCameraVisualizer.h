@@ -23,7 +23,7 @@ public:
         osg::ref_ptr<osg::Geode> geode = new osg::Geode();
         osg::ref_ptr<osg::Geometry> pyramid = new osg::Geometry();
 
-        // 顶点定义（底面为正方形，顶点在原点上方）
+        // 顶点定义
         float half = 0.2f;
         float height = 0.5f;
         osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array;

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>600</width>
-    <height>400</height>
+    <width>438</width>
+    <height>448</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -25,15 +25,15 @@
        </widget>
       </item>
       <item>
+       <widget class="QSlider" name="HSlider_size">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QWidget" name="widget_6" native="true">
         <layout class="QHBoxLayout" name="horizontalLayout_5">
-         <item>
-          <widget class="QSlider" name="HSlider_size">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-          </widget>
-         </item>
          <item>
           <widget class="QLabel" name="lbl_PSize">
            <property name="text">
@@ -63,7 +63,7 @@
          <item>
           <widget class="QSlider" name="HSlider_opacity">
            <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
+            <enum>Qt::Horizontal</enum>
            </property>
           </widget>
          </item>
@@ -75,6 +75,26 @@
           </widget>
          </item>
         </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget_4" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_4">
+      <item>
+       <widget class="QPushButton" name="pushButton_2">
+        <property name="text">
+         <string>暂停</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSlider" name="horizontalSlider_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
        </widget>
       </item>
      </layout>
@@ -102,19 +122,6 @@
           <string>颜色映射</string>
          </property>
         </item>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="QWidget" name="widget_4" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout_4">
-      <item>
-       <widget class="QCheckBox" name="CBox_show_normals">
-        <property name="text">
-         <string>显示法向量</string>
-        </property>
        </widget>
       </item>
      </layout>

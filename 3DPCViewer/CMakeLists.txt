@@ -45,6 +45,10 @@ set(ROSBAG_FOURCE
     BagDataTypes.h
     OdomCameraVisualizer.h
     OdomPathVisualizer.h
+    DataService.h
+    DataService.cpp
+    Controller.h
+    Controller.cpp
 )
 
 set(PROJECT_UI_SOURCES

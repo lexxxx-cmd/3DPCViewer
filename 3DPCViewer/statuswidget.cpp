@@ -10,11 +10,3 @@ StatusWidget::StatusWidget(QWidget *parent)
 StatusWidget::~StatusWidget() = default;
 
 
-void StatusWidget::updatePointSize(const int& size) {
-	ui->lbl_pointsize->setText(QString::number(size));
-}
-
-void StatusWidget::updateFPS(const int& fps) {
-	ui->lbl_fps->setText(QString::number(fps));
-}
-

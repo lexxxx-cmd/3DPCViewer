@@ -1,4 +1,4 @@
-#include "pcviewer.h"
+#include "Controller.h"
 #include "BagDataTypes.h"
 #include <QtWidgets/QApplication>
 
@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     qRegisterMetaType<ImageFrame>("ImageFrame");
     qRegisterMetaType<OdomFrame>("OdomFrame");
 
-    PCViewer window;
-    window.show();
+    Controller window(nullptr);
+    window.run();
     return app.exec();
 }

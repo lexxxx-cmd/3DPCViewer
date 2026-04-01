@@ -18,13 +18,6 @@
     <widget class="QWidget" name="widget" native="true">
      <layout class="QGridLayout" name="gridLayout_2">
       <item row="0" column="0">
-       <widget class="QPushButton" name="pB_import_data">
-        <property name="text">
-         <string>导入点云数据...</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
        <widget class="QPushButton" name="pB_import_bag">
         <property name="text">
          <string>导入bag...</string>

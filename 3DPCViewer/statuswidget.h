@@ -18,8 +18,6 @@ public:
 
 
 public slots:
-	void updatePointSize(const int& size);
-	void updateFPS(const int& fps);
 
 
 private:

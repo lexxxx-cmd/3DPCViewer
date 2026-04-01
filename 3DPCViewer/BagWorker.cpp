@@ -127,7 +127,7 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     offset += frame_id_len;
 
     uint32_t child_frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
-    odom.child_frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+    odom.child_frame_id = QString::fromUtf8((const char*)(payload + offset), child_frame_id_len);
     offset += child_frame_id_len;
 
     odom.pose.x = *(double*)(payload + offset); offset += 8;

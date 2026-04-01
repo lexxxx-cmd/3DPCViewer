@@ -27,11 +27,14 @@ signals:
     void odomFrameReady(const OdomFrame& frame);
     void progressUpdated(int percent);
 
+    // 错误
+    void errorOccur(const QString& errorMsg);
+
     // 任务结束信号
     void finished();
 
 private:
-    bool m_stopFlag;
+    std::atomic<bool> m_stopFlag;
 
     // 二进制剥离核心算法
     LivoxCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);

@@ -27,8 +27,6 @@ InteractionWidget::InteractionWidget(QWidget *parent)
 	onSizeSliderChanged(ui->HSlider_size->value());
 	onOpacitySliderChanged(ui->HSlider_opacity->value());
 
-	connect(ui->CBox_show_normals, &QCheckBox::clicked,
-		this, &InteractionWidget::onNormalShow);
 }
 
 InteractionWidget::~InteractionWidget() = default;
@@ -46,9 +44,3 @@ void InteractionWidget::onOpacitySliderChanged(int value)
 	ui->lbl_Popacity->setText(QString("%1%").arg(value));
 	emit pointOpacityChanged(value);
 }
-
-void InteractionWidget::onNormalShow(const bool& show)
-{
-	emit requestShowNormals(show);
-}
-

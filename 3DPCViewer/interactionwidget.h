@@ -19,13 +19,12 @@ public:
 public slots:
 	void onSizeSliderChanged(int value);
 	void onOpacitySliderChanged(int value);
-	void onNormalShow(const bool& show);
 
 
 signals:
 	void pointSizeChanged(const int& value);
 	void pointOpacityChanged(const int& value);
-	void requestShowNormals(const bool& show);
+
 
 private:
 	std::unique_ptr<Ui::InteractionWidgetClass> ui;
