@@ -16,6 +16,7 @@ DataService::DataService(QObject *parent)
 	connect(m_bagWorker, &BagWorker::imageFrameReady, this, &DataService::imageFrameReady);
 	connect(m_bagWorker, &BagWorker::odomFrameReady, this, &DataService::odomFrameReady);
 	connect(m_bagWorker, &BagWorker::progressUpdated, this, &DataService::progressUpdated);
+	connect(m_bagWorker, &BagWorker::topicListReady, this, &DataService::topicListReady);
 
 	if (!m_workerThread->isRunning()) {
 		m_workerThread->start();

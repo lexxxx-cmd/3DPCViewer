@@ -28,6 +28,7 @@ void Controller::setupConnections()
 	connect(m_dataService.get(), &DataService::imageFrameReady, m_viewer.get(), &PCViewer::imageFrameReady);
 	connect(m_dataService.get(), &DataService::odomFrameReady, m_viewer.get(), &PCViewer::odomFrameReady);
 	connect(m_dataService.get(), &DataService::progressUpdated, m_viewer.get(), &PCViewer::progressUpdated);
+	connect(m_dataService.get(), &DataService::topicListReady, m_viewer.get(), &PCViewer::topicListReady);
 
     
 }

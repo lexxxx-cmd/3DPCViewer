@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QThread>
+#include <unordered_map>
 #include "BagDataTypes.h"
 
 class BagWorker : public QObject
@@ -26,6 +27,7 @@ signals:
     void imageFrameReady(const ImageFrame& frame);
     void odomFrameReady(const OdomFrame& frame);
     void progressUpdated(int percent);
+    void topicListReady(const std::vector<std::string>& topics);
 
     // 错误
     void errorOccur(const QString& errorMsg);
@@ -35,6 +37,7 @@ signals:
 
 private:
     std::atomic<bool> m_stopFlag;
+    std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache; // 缓存已解析的数据，按topic索引
 
     // 二进制剥离核心算法
     LivoxCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);

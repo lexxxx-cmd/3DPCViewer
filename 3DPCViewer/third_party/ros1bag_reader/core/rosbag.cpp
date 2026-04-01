@@ -282,6 +282,15 @@ void Rosbag::printAvailableTopics() const {
                   });
 }
 
+std::vector<std::string> Rosbag::getAvailableTopics() const {
+    std::vector<std::string> topics;
+    topics.reserve(connections_.size());
+    std::transform(connections_.cbegin(), connections_.cend(),
+        std::back_inserter(topics),
+        [](const auto& connection) { return connection.second.topic_name; });
+    return topics;
+}
+
 void Rosbag::saveDataOnTopic(const std::string &topic_name,
                              const std::string &output_path) {
     if (topic_to_conn_id_.find(topic_name) != topic_to_conn_id_.cend()) {

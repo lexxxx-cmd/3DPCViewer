@@ -9,6 +9,7 @@ int main(int argc, char *argv[])
     qRegisterMetaType<LivoxCloudFrame>("LivoxCloudFrame");
     qRegisterMetaType<ImageFrame>("ImageFrame");
     qRegisterMetaType<OdomFrame>("OdomFrame");
+    qRegisterMetaType<std::vector<std::string>>("std::vector<std::string>");
 
     Controller window(nullptr);
     window.run();

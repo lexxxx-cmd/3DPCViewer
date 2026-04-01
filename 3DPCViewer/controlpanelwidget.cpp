@@ -9,6 +9,7 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 	connect(ui->DataW, &DataWidget::requestProcBag, this, [this](const QString& path) {
 		emit requestProcBag(path);
 		});
+	connect(this, &ControlPanelWidget::topicListReady, ui->StatusW, &StatusWidget::onUpdateTopicList);
 	/*
 	connect(ui->InterWidget, &InteractionWidget::pointSizeChanged, this, [this](const int& value) {
 		emit pointSizeChanged(value);
@@ -22,7 +23,7 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 		});
 
 	connect(this, &ControlPanelWidget::requestUpdateFileSize, ui->DataW, &DataWidget::updateFileSize);
-	connect(this, &ControlPanelWidget::requestUpdatePointSize, ui->StatusW, &StatusWidget::updatePointSize);
+	
 	connect(this, &ControlPanelWidget::requestUpdateFPS, ui->StatusW, &StatusWidget::updateFPS);
 	*/
 	

@@ -24,6 +24,7 @@ signals:
 	void imageFrameReady(const ImageFrame& frame);
 	void odomFrameReady(const OdomFrame& frame);
 	void progressUpdated(int percent);
+	void topicListReady(const std::vector<std::string>& topics);
 
 	// ´íÎó
 	void errorOccur(const QString& errorMsg);

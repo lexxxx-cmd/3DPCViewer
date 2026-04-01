@@ -14,11 +14,24 @@ void BagWorker::processBag(const QString& bagPath) {
 
     // 1. 加载 Bag 索引
     Rosbag bag(bagPath.toStdString());
+    std::vector<std::string> topicList = bag.getAvailableTopics();
+
+    emit topicListReady(topicList);
 
     // 2. 拿到纯粹的二进制大数组
     auto livox_payloads = bag.getRawPayloads("/livox/lidar");
     auto image_payloads = bag.getRawPayloads("/usb_cam/image_raw/compressed");
     auto odometry_payloads = bag.getRawPayloads("/aft_mapped_to_init");
+
+    for (const std::string&topic : topicList) {
+		qDebug() << "Bag 中可用 Topic:" << QString::fromStdString(topic);
+        if (m_bagCache.find(topic) != m_bagCache.end()) {
+			// 可能属于一个新的场景包，提示清空缓存重新导入 TODO
+            m_bagCache.clear();
+			return;
+		}
+        m_bagCache[topic] = bag.getRawPayloads(topic);
+	}
 
     int totalFrames = odometry_payloads.size();
     if (totalFrames == 0) {
@@ -41,6 +54,7 @@ void BagWorker::processBag(const QString& bagPath) {
         //    ImageFrame imgFrame = parseImagePayload(img_payload.data(), img_payload.size());
         //    emit imageFrameReady(imgFrame);
         //}
+        
         if (i < odometry_payloads.size()) {
             const auto& odom_payload = odometry_payloads[i];
             OdomFrame odomFrame = parseOdomPayload(odom_payload.data(), odom_payload.size());
@@ -51,6 +65,7 @@ void BagWorker::processBag(const QString& bagPath) {
 
         // 控制播放帧率
         QThread::msleep(100);
+        
     }
 
     emit finished();

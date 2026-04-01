@@ -37,6 +37,9 @@ signals:
 	void pointSizeChanged(const int& value);
 	void pointOpacityChanged(const int& value);
 
+	void progressUpdated(int percent);
+	void topicListReady(const std::vector<std::string>& topics);
+
 private:
 	std::unique_ptr<Ui::ControlPanelWidgetClass> ui;
 };

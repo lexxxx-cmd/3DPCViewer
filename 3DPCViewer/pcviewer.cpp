@@ -13,6 +13,8 @@ PCViewer::PCViewer(QWidget *parent)
     connect(this, &PCViewer::cloudFrameReady, ui->ShowWidget, &VisualAreaWidget::onCloudFrameReady);
     connect(this, &PCViewer::imageFrameReady, ui->ShowWidget, &VisualAreaWidget::onImageFrameReady);
     connect(this, &PCViewer::odomFrameReady, ui->ShowWidget, &VisualAreaWidget::onOdomFrameReady);
+    connect(this, &PCViewer::progressUpdated, ui->ControlWidget, &ControlPanelWidget::progressUpdated);
+    connect(this, &PCViewer::topicListReady, ui->ControlWidget, &ControlPanelWidget::topicListReady);
 
     connect(ui->ControlWidget, &ControlPanelWidget::pointSizeChanged, ui->ShowWidget, &VisualAreaWidget::onChangeSizeRequested);
     connect(ui->ControlWidget, &ControlPanelWidget::pointOpacityChanged, ui->ShowWidget, &VisualAreaWidget::onChangeOpacityRequested);

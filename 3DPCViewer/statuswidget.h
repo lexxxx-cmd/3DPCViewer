@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <memory>
+#include <QStandardItemModel>
 #include "ui_statuswidget.h"
 
 QT_BEGIN_NAMESPACE
@@ -18,9 +19,11 @@ public:
 
 
 public slots:
-
+	void onUpdateTopicList(const std::vector<std::string>& topics);
+	void onTopicStateChanged(QStandardItem* item);
 
 private:
 	std::unique_ptr<Ui::StatusWidgetClass> ui;
+	QStandardItemModel* topicModel;
 };
 
