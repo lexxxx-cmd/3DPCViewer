@@ -49,6 +49,7 @@ set(ROSBAG_FOURCE
     DataService.cpp
     Controller.h
     Controller.cpp
+    Grid.h
 )
 
 set(PROJECT_UI_SOURCES

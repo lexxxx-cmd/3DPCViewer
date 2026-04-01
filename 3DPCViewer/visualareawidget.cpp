@@ -21,12 +21,14 @@ void VisualAreaWidget::initOSG() {
     //н╩вк╫з╣Ц
     _camViz = std::make_unique<OdomCameraVisualizer>();
     _pathViz = std::make_unique<OdomPathVisualizer>();
+    _gridViz = std::make_unique<Grid>(100);
 
     m_root = new osg::Group();
     osgViewer::Viewer* viewer = m_osgWidget->getOsgViewer();
 
     m_root->addChild(_camViz->getRootNode());
     m_root->addChild(_pathViz->getNode());
+    m_root->addChild(_gridViz->getGridNode());
 
     viewer->setSceneData(m_root);
     viewer->setCameraManipulator(new osgGA::TrackballManipulator);

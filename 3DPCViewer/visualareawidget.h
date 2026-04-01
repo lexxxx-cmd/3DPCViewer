@@ -15,6 +15,7 @@
 #include "BagDataTypes.h"
 #include "OdomCameraVisualizer.h"
 #include "OdomPathVisualizer.h"
+#include "Grid.h"
 
 namespace Ui { class VisualAreaWidgetClass; }
 
@@ -47,9 +48,11 @@ private:
 
     pcl::PCLPointCloud2::Ptr m_currentCloud;
 
-    // 缓存当前状态，便于在替换 Geometry 时恢复
+    
     std::unique_ptr<OdomCameraVisualizer> _camViz;
     std::unique_ptr<OdomPathVisualizer> _pathViz;
+    std::unique_ptr<Grid> _gridViz;
+    // 缓存当前状态，便于在替换 Geometry 时恢复
     int m_currentPointSize = 2;
     int m_currentOpacity = 100;
     bool m_showNormals = false;
