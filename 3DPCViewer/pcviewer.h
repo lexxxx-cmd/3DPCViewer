@@ -39,8 +39,10 @@ signals:
 	void cloudFrameReady(const LivoxCloudFrame& frame);
 	void imageFrameReady(const ImageFrame& frame);
 	void odomFrameReady(const OdomFrame& frame);
-	void progressUpdated(int percent);
 	void topicListReady(const std::vector<std::string>& topics);
+	void messageNumReady(int num);
+
+	void progressUpdated(const int value);//通知上层，显示进度更新
 
 	// 错误
 	void errorOccur(const QString& errorMsg);

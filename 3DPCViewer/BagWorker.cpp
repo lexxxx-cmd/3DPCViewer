@@ -12,17 +12,14 @@ void BagWorker::stopProcessing() {
 void BagWorker::processBag(const QString& bagPath) {
     m_stopFlag = false;
 
-    // 1. 加载 Bag 索引
+    // 加载 Bag 索引
     Rosbag bag(bagPath.toStdString());
     std::vector<std::string> topicList = bag.getAvailableTopics();
 
     emit topicListReady(topicList);
 
-    // 2. 拿到纯粹的二进制大数组
-    auto livox_payloads = bag.getRawPayloads("/livox/lidar");
-    auto image_payloads = bag.getRawPayloads("/usb_cam/image_raw/compressed");
-    auto odometry_payloads = bag.getRawPayloads("/aft_mapped_to_init");
-
+    // 拿到纯粹的二进制大数组
+    int max_size = 0;
     for (const std::string&topic : topicList) {
 		qDebug() << "Bag 中可用 Topic:" << QString::fromStdString(topic);
         if (m_bagCache.find(topic) != m_bagCache.end()) {
@@ -31,44 +28,36 @@ void BagWorker::processBag(const QString& bagPath) {
 			return;
 		}
         m_bagCache[topic] = bag.getRawPayloads(topic);
+        max_size = std::max(max_size, (int)m_bagCache[topic].size());
 	}
-
-    int totalFrames = odometry_payloads.size();
-    if (totalFrames == 0) {
+    // 保证拿到的最大消息数不为零，否则直接结束
+    if (max_size == 0) {
         emit finished();
         return;
-    }
-
-    // 3. 开始遍历解析（这里以 Livox 为主线，实际应用可根据时间戳合并播放）
-    for (int i = 0; i < totalFrames; ++i) {
-        if (m_stopFlag) break;
-
-        // --- 解析 Livox 点云 ---
-        //const auto& cloud_payload = livox_payloads[i];
-        //LivoxCloudFrame cloudFrame = parseLivoxPayload(cloud_payload.data(), cloud_payload.size());
-        //emit cloudFrameReady(cloudFrame);
-
-        // --- 解析对应的图像 (为了演示，假设图像和点云数量一致或近似) ---
-        //if (i < image_payloads.size()) {
-        //    const auto& img_payload = image_payloads[i];
-        //    ImageFrame imgFrame = parseImagePayload(img_payload.data(), img_payload.size());
-        //    emit imageFrameReady(imgFrame);
-        //}
-        
-        if (i < odometry_payloads.size()) {
-            const auto& odom_payload = odometry_payloads[i];
-            OdomFrame odomFrame = parseOdomPayload(odom_payload.data(), odom_payload.size());
-            emit odomFrameReady(odomFrame);
-        }
-
-        emit progressUpdated((i * 100) / totalFrames);
-
-        // 控制播放帧率
-        QThread::msleep(100);
-        
-    }
-
+	}
+    emit messageNumReady(max_size);
     emit finished();
+}
+
+void BagWorker::updateProgress(const int value) {
+    for (const auto& topicItem : m_bagCache) {
+        if (value < m_bagCache[topicItem.first].size()) {
+            const auto& payload = m_bagCache[topicItem.first][value];
+            if (topicItem.first == "/livox/lidar") {
+                LivoxCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
+                emit cloudFrameReady(frame);
+            }
+            else if (topicItem.first == "/usb_cam/image_raw/compressed") {
+                ImageFrame frame = parseImagePayload(payload.data(), payload.size());
+                emit imageFrameReady(frame);
+            }
+            else if (topicItem.first == "/aft_mapped_to_init") {
+                OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
+                frame.index = value;
+                emit odomFrameReady(frame);
+            }
+        }
+    }
 }
 
 // ----------------- 二进制解析算法 ----------------- //

@@ -16,6 +16,7 @@ public:
 	QThread* getThread() const { return m_workerThread; }
 public slots:
 	void startProcess(const QString& path);
+	void updateProgress(const int value);
 	void stopProcess();
 
 signals:
@@ -25,6 +26,7 @@ signals:
 	void odomFrameReady(const OdomFrame& frame);
 	void progressUpdated(int percent);
 	void topicListReady(const std::vector<std::string>& topics);
+	void messageNumReady(int num);
 
 	// ´íÎó
 	void errorOccur(const QString& errorMsg);

@@ -44,7 +44,8 @@ struct Twist {
 
 // 传给前端的一帧里程计数据
 struct OdomFrame {
-    uint64_t timestamp;      // 纳秒级时间戳
+    uint64_t timestamp;// 纳秒级时间戳
+    int index;
     QString frame_id;
     QString child_frame_id;
     Pose pose;

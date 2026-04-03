@@ -50,6 +50,8 @@ set(ROSBAG_FOURCE
     Controller.h
     Controller.cpp
     Grid.h
+    ImagePanel.h
+    ImagePanel.cpp
 )
 
 set(PROJECT_UI_SOURCES

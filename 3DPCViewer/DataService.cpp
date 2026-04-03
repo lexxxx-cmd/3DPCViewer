@@ -17,6 +17,7 @@ DataService::DataService(QObject *parent)
 	connect(m_bagWorker, &BagWorker::odomFrameReady, this, &DataService::odomFrameReady);
 	connect(m_bagWorker, &BagWorker::progressUpdated, this, &DataService::progressUpdated);
 	connect(m_bagWorker, &BagWorker::topicListReady, this, &DataService::topicListReady);
+	connect(m_bagWorker, &BagWorker::messageNumReady, this, &DataService::messageNumReady);
 
 	if (!m_workerThread->isRunning()) {
 		m_workerThread->start();
@@ -38,6 +39,14 @@ void DataService::startProcess(const QString& path)
 		QMetaObject::invokeMethod(m_bagWorker, "processBag",
 			Qt::QueuedConnection,
 			Q_ARG(QString, path));
+	}
+}
+
+void DataService::updateProgress(const int value) {
+	if (m_bagWorker) {
+		QMetaObject::invokeMethod(m_bagWorker, "updateProgress",
+			Qt::QueuedConnection,
+			Q_ARG(int, value));
 	}
 }
 

@@ -84,16 +84,37 @@
     <widget class="QWidget" name="widget_4" native="true">
      <layout class="QHBoxLayout" name="horizontalLayout_4">
       <item>
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="pB_backward">
         <property name="text">
-         <string>暂停</string>
+         <string>上一帧</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QSlider" name="horizontalSlider_2">
+       <widget class="QPushButton" name="pB_play_pause">
+        <property name="text">
+         <string>play</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pB_forward">
+        <property name="text">
+         <string>下一帧</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSlider" name="HSlider_progress">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbl_ProgressValue">
+        <property name="text">
+         <string>0</string>
         </property>
        </widget>
       </item>

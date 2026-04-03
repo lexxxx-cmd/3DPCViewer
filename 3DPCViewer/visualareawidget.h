@@ -16,6 +16,7 @@
 #include "OdomCameraVisualizer.h"
 #include "OdomPathVisualizer.h"
 #include "Grid.h"
+#include "ImagePanel.h"
 
 namespace Ui { class VisualAreaWidgetClass; }
 
@@ -41,6 +42,7 @@ private:
 
     Ui::VisualAreaWidgetClass* ui;
     osgQOpenGLWidget* m_osgWidget;
+    ImagePanel* m_imagePanel;
 
     osg::ref_ptr<osg::Group> m_root;
     osg::ref_ptr<osg::Geode> m_cloudGeode;

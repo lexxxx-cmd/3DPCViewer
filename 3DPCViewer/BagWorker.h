@@ -18,6 +18,7 @@ public slots:
     // 后台解包的入口槽函数
     void processBag(const QString& bagPath);
 
+    void updateProgress(const int value);
     // 用于安全中止读取
     void stopProcessing();
 
@@ -28,7 +29,7 @@ signals:
     void odomFrameReady(const OdomFrame& frame);
     void progressUpdated(int percent);
     void topicListReady(const std::vector<std::string>& topics);
-
+    void messageNumReady(int num);
     // 错误
     void errorOccur(const QString& errorMsg);
 

@@ -10,6 +10,11 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 		emit requestProcBag(path);
 		});
 	connect(this, &ControlPanelWidget::topicListReady, ui->StatusW, &StatusWidget::onUpdateTopicList);
+	connect(this, &ControlPanelWidget::messageNumReady, ui->InterWidget, &InteractionWidget::onMaxmessageNumSet);
+
+	connect(ui->InterWidget, &InteractionWidget::progressUpdated, this, [this](const int value) {
+		emit progressUpdated(value);
+		});
 	/*
 	connect(ui->InterWidget, &InteractionWidget::pointSizeChanged, this, [this](const int& value) {
 		emit pointSizeChanged(value);

@@ -15,6 +15,11 @@ VisualAreaWidget::VisualAreaWidget(QWidget* parent) : QWidget(parent), ui(new Ui
     ui->gridLayout_2->addWidget(m_osgWidget);
 
     connect(m_osgWidget, &osgQOpenGLWidget::initialized, this, &VisualAreaWidget::initOSG);
+
+    m_imagePanel = new ImagePanel(this);
+    m_imagePanel->move(20, 20);
+    m_imagePanel->raise();
+    m_imagePanel->setImage(QPixmap("E:\\C++_pj\\repos\\3DPCViewer\\data\\1774599812.5.jpg"));
 }
 
 void VisualAreaWidget::initOSG() {
@@ -32,7 +37,7 @@ void VisualAreaWidget::initOSG() {
 
     viewer->setSceneData(m_root);
     viewer->setCameraManipulator(new osgGA::TrackballManipulator);
-    viewer->getCamera()->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 1.0));
+    viewer->getCamera()->setClearColor(osg::Vec4(0.5, 0.7, 1.0, 1.0));
 }
 
 
@@ -93,6 +98,10 @@ void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
 
 VisualAreaWidget::~VisualAreaWidget() {
     delete ui;
+    delete m_osgWidget;
+    delete m_imagePanel;
+    m_imagePanel = nullptr;
+    m_osgWidget = nullptr;
 }
 
 void VisualAreaWidget::onCloudFrameReady(const LivoxCloudFrame& frame) {
@@ -114,7 +123,7 @@ void VisualAreaWidget::onOdomFrameReady(const OdomFrame& frame) {
 
     if (_pathViz)
     {
-        _pathViz->updatePose(frame.pose.x, frame.pose.y, frame.pose.z);
+        _pathViz->updatePose(frame.pose.x, frame.pose.y, frame.pose.z, frame.index);
     }
     m_osgWidget->update();
 }

@@ -31,7 +31,7 @@ public:
 
 	osg::ref_ptr<osg::Geode> getNode() { return _pathGeode; }
 
-	void updatePose(double x, double y, double z) {
+	void updatePose(double x, double y, double z, int index) {
 		qDebug() << "Path Point:" << x << y << z;
 		if (!_pathGeode) {
 			_pathGeode = new osg::Geode();
@@ -47,14 +47,21 @@ public:
 
 		osg::Geometry* geom = dynamic_cast<osg::Geometry*>(_pathGeode->getDrawable(0));
 		if (!geom) return;
-		vertices->push_back(osg::Vec3(x, y, z));
-		vertices->dirty(); // 显式通知数组已更改
 
 		// 2. 更新绘制计数 (关键！)
 		osg::DrawArrays* da = dynamic_cast<osg::DrawArrays*>(geom->getPrimitiveSet(0));
 		if (da) {
-			da->setCount(vertices->size());
-			da->dirty(); // 通知绘制数组已更改
+			if (index >= max_odomNum) {
+				vertices->push_back(osg::Vec3(x, y, z));
+				max_odomNum++;
+				vertices->dirty(); // 显式通知数组已更改
+				da->setCount(vertices->size());
+				da->dirty(); // 通知绘制数组已更改
+			}
+			else {
+				da->setCount(index);
+				da->dirty(); // 通知绘制数组已更改
+			}
 		}
 
 		// 3. 更新包围球，防止被剔除
@@ -64,5 +71,7 @@ private:
 	osg::ref_ptr<osg::Geode> _pathGeode;
 	osg::ref_ptr<osg::Vec3Array> vertices;
 	osg::ref_ptr<osg::Vec4Array> colors;
+
+	int max_odomNum = 0;
 };
 #endif

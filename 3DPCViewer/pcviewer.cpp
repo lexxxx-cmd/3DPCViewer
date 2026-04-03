@@ -10,11 +10,14 @@ PCViewer::PCViewer(QWidget *parent)
     connect(ui->ControlWidget, &ControlPanelWidget::requestProcBag, this, [this](const QString& path) {
         emit requestProcBag(path);
         });
+    connect(this, &PCViewer::requestUpdateFileSize, ui->ControlWidget, &ControlPanelWidget::onFileSizeUpdated);
     connect(this, &PCViewer::cloudFrameReady, ui->ShowWidget, &VisualAreaWidget::onCloudFrameReady);
     connect(this, &PCViewer::imageFrameReady, ui->ShowWidget, &VisualAreaWidget::onImageFrameReady);
     connect(this, &PCViewer::odomFrameReady, ui->ShowWidget, &VisualAreaWidget::onOdomFrameReady);
-    connect(this, &PCViewer::progressUpdated, ui->ControlWidget, &ControlPanelWidget::progressUpdated);
+    
     connect(this, &PCViewer::topicListReady, ui->ControlWidget, &ControlPanelWidget::topicListReady);
+    connect(this, &PCViewer::messageNumReady, ui->ControlWidget, &ControlPanelWidget::messageNumReady);
+    connect(ui->ControlWidget, &ControlPanelWidget::progressUpdated, this, &PCViewer::progressUpdated);
 
     connect(ui->ControlWidget, &ControlPanelWidget::pointSizeChanged, ui->ShowWidget, &VisualAreaWidget::onChangeSizeRequested);
     connect(ui->ControlWidget, &ControlPanelWidget::pointOpacityChanged, ui->ShowWidget, &VisualAreaWidget::onChangeOpacityRequested);
