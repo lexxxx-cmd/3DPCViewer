@@ -2,7 +2,7 @@
 #define VISUALAREAWIDGET_H
 
 #include <QWidget>
-#include <osgQOpenGL/osgQOpenGLWidget>
+#include "osgQOpenGL/osgQOpenGLWidget.h"
 #include <osgViewer/Viewer>
 #include <osgGA/TrackballManipulator>
 #include <osg/Group>

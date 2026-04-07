@@ -9,16 +9,18 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core )
+find_package(QT NAMES Qt6 REQUIRED COMPONENTS Core )
 find_package(Qt${QT_VERSION_MAJOR}
     COMPONENTS
         Core
         Gui
         Widgets
         Concurrent
+        OpenGL
+        OpenGLWidgets
 )
 find_package(PCL REQUIRED)
-find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil osgQt)
+find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil)
 
 add_subdirectory(third_party/ros1bag_reader)
 add_subdirectory(src)

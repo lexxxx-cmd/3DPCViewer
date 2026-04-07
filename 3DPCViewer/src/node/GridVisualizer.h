@@ -1,7 +1,6 @@
 #ifndef GRID_H
 #define GRID_H
 
-
 #include <osg/Group>
 #include <osg/Geode>
 #include <osg/Geometry>
@@ -13,14 +12,13 @@
 
 class Grid {
 public:
-	Grid(float size = 1000.0f) {
+    Grid(float size = 1000.0f) {
         _gridGeode = new osg::Geode();
 
-        // 创建渲染容器
+        // 1. 创建几何体（一个覆盖地面的大矩形）
         osg::ref_ptr<osg::Geometry> quad = new osg::Geometry();
         osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array();
 
-        // 设置范围
         float s = size;
         vertices->push_back(osg::Vec3(-s, -s, 0.0f));
         vertices->push_back(osg::Vec3(s, -s, 0.0f));
@@ -30,7 +28,7 @@ public:
         quad->setVertexArray(vertices);
         quad->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::QUADS, 0, 4));
 
-        // 配置着色器
+        // 2. 配置着色器程序 (兼容 Qt6 Core Profile)
         osg::ref_ptr<osg::Program> program = new osg::Program;
         program->addShader(new osg::Shader(osg::Shader::VERTEX, vertSource));
         program->addShader(new osg::Shader(osg::Shader::FRAGMENT, fragSource));
@@ -38,81 +36,101 @@ public:
         osg::StateSet* ss = quad->getOrCreateStateSet();
         ss->setAttributeAndModes(program, osg::StateAttribute::ON);
 
-        // 配置渲染状态：开启混合（透明），关闭光照，深度写入微调
+        // 3. 配置渲染状态
+        // 开启混合以支持透明淡出
         ss->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
         ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
-        // 设置渲染顺序
+        // 确保网格不会遮挡透明物体，通常放在较早的渲染阶段
         ss->setRenderBinDetails(-1, "RenderBin");
 
-        // 设置参数
-        ss->addUniform(new osg::Uniform("gridSpacing", 1.0f));      // 格子大小
-        ss->addUniform(new osg::Uniform("lineWidth", 0.1f));      // 线条粗细
-        ss->addUniform(new osg::Uniform("majorGridStep", 10.0f));  // 主网格步长（每10格加深）
+        // 4. 设置 Uniform 参数
+        ss->addUniform(new osg::Uniform("gridSpacing", 1.0f));     // 基础格网间距
+        ss->addUniform(new osg::Uniform("lineWidth", 1.0f));       // 线条平滑宽度
+        ss->addUniform(new osg::Uniform("majorGridStep", 10.0f));  // 主网格步长
         ss->addUniform(new osg::Uniform("gridColor", osg::Vec4(0.5f, 0.5f, 0.5f, 0.6f)));
-        ss->addUniform(new osg::Uniform("axisXColor", osg::Vec4(0.8f, 0.1f, 0.1f, 1.0f))); // X轴红色
-        ss->addUniform(new osg::Uniform("axisYColor", osg::Vec4(0.1f, 0.8f, 0.1f, 1.0f))); // Y轴绿色
+        ss->addUniform(new osg::Uniform("axisXColor", osg::Vec4(0.8f, 0.1f, 0.1f, 1.0f)));
+        ss->addUniform(new osg::Uniform("axisYColor", osg::Vec4(0.1f, 0.8f, 0.1f, 1.0f)));
+        ss->addUniform(new osg::Uniform("fadeRadius", size * 0.8f)); // 边缘淡出起始距离
 
         _gridGeode->addDrawable(quad);
-	}
-	~Grid() {}
-	osg::ref_ptr<osg::Geode> getGridNode() const { return _gridGeode; }
+    }
+
+    osg::ref_ptr<osg::Geode> getGridNode() const { return _gridGeode; }
+
 private:
-	osg::ref_ptr<osg::Geode> _gridGeode;
-    // Vertex Shader: 计算世界坐标并传递给片元
+    osg::ref_ptr<osg::Geode> _gridGeode;
+
+    // --- Vertex Shader (GLSL 330) ---
     const char* vertSource = R"(
-        varying vec3 vWorldPos;
+        #version 330 core
+        in vec4 osg_Vertex;
+        uniform mat4 osg_ModelViewProjectionMatrix;
+        out vec3 vWorldPos;
         void main() {
-            vWorldPos = gl_Vertex.xyz;
-            gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+            vWorldPos = osg_Vertex.xyz;
+            gl_Position = osg_ModelViewProjectionMatrix * osg_Vertex;
         }
     )";
 
-    // Fragment Shader
+    // --- Fragment Shader (GLSL 330) ---
     const char* fragSource = R"(
-        varying vec3 vWorldPos;
+        #version 330 core
+        in vec3 vWorldPos;
         uniform float gridSpacing;
         uniform float lineWidth;
         uniform float majorGridStep;
         uniform vec4 gridColor;
         uniform vec4 axisXColor;
         uniform vec4 axisYColor;
+        uniform float fadeRadius;
 
-        float getGrid(float pos, float spacing, float width) {
-            float dist = abs(fract(pos / spacing - 0.5) - 0.5) / (fwidth(pos) / spacing);
-            return 1.0 - smoothstep(0.0, width, dist);
+        out vec4 fragColor;
+
+        float getGrid(float pos, float spacing) {
+            // 使用 fwidth 实现抗锯齿的网格线
+            float coord = pos / spacing;
+            float grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
+            return 1.0 - smoothstep(0.0, lineWidth, grid);
         }
 
         void main() {
             float x = vWorldPos.x;
             float y = vWorldPos.y;
 
-            // 基础网格
-            float lineX = getGrid(x, gridSpacing, lineWidth);
-            float lineY = getGrid(y, gridSpacing, lineWidth);
+            // 1. 计算基础网格和主网格
+            float lineX = getGrid(x, gridSpacing);
+            float lineY = getGrid(y, gridSpacing);
+            float majorX = getGrid(x, gridSpacing * majorGridStep);
+            float majorY = getGrid(y, gridSpacing * majorGridStep);
+
+            float gridAlpha = max(lineX, lineY);
+            float majorAlpha = max(majorX, majorY);
+
+            // 2. 颜色混合
+            vec4 finalColor = gridColor;
+            if (majorAlpha > 0.1) {
+                finalColor.rgb *= 1.5; // 主网格亮度提升
+                gridAlpha = max(gridAlpha, majorAlpha);
+            }
+
+            // 3. 坐标轴突出显示 (X轴红色, Y轴绿色)
+            float axisX = 1.0 - smoothstep(0.0, 0.05, abs(y));
+            float axisY = 1.0 - smoothstep(0.0, 0.05, abs(x));
             
-            // 主网格（深色线）
-            float majorX = getGrid(x, gridSpacing * majorGridStep, lineWidth * 0.8);
-            float majorY = getGrid(y, gridSpacing * majorGridStep, lineWidth * 0.8);
+            if (axisX > 0.1) finalColor = mix(finalColor, axisXColor, axisX);
+            if (axisY > 0.1) finalColor = mix(finalColor, axisYColor, axisY);
 
-            float grid = max(lineX, lineY);
-            float major = max(majorX, majorY);
-
-            // 最终颜色混合
-            vec4 color = gridColor;
-            if (major > 0.1) color *= 1.5; // 加深主网格
-
-            // 坐标轴突出显示 (X轴是 y=0 的线，Y轴是 x=0 的线)
-            if (abs(y) < gridSpacing * 0.1) color = mix(color, axisXColor, getGrid(y, 10000.0, 0.02));
-            if (abs(x) < gridSpacing * 0.1) color = mix(color, axisYColor, getGrid(x, 10000.0, 0.02));
-
-            // 计算到中心的距离，实现边缘淡出（Infinite的感觉）
+            // 4. 边缘淡出效果
             float dist = length(vWorldPos.xy);
-            float fade = 1.0 - smoothstep(0.0, 1000.0, dist); // 1000是淡出半径
+            float fade = 1.0 - smoothstep(fadeRadius * 0.5, fadeRadius, dist);
 
-            gl_FragColor = vec4(color.rgb, max(grid, major) * color.a * fade);
+            float alpha = gridAlpha * finalColor.a * fade;
+            if (alpha < 0.01) discard; // 性能优化：丢弃全透明片元
+
+            fragColor = vec4(finalColor.rgb, alpha);
         }
     )";
 };
 
-#endif // GRID_H
+#endif
