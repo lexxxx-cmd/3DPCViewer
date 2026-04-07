@@ -1,5 +1,5 @@
-#include "Controller.h"
-#include "BagDataTypes.h"
+#include "core/Controller.h"
+#include "io/BagDataTypes.h"
 #include <QtWidgets/QApplication>
 
 int main(int argc, char *argv[])

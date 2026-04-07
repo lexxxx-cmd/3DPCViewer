@@ -12,12 +12,12 @@
 #include <QFutureWatcher>
 
 #include <pcl/PCLPointCloud2.h>
-#include "BagDataTypes.h"
-#include "OdomCameraVisualizer.h"
-#include "OdomPathVisualizer.h"
-#include "LivoxCloudVisualizer.h"
-#include "Grid.h"
-#include "ImagePanel.h"
+#include "io/BagDataTypes.h"
+#include "node/OdomCameraVisualizer.h"
+#include "node/OdomPathVisualizer.h"
+#include "node/LivoxCloudVisualizer.h"
+#include "node/GridVisualizer.h"
+#include "ImagePanelWidget.h"
 
 namespace Ui { class VisualAreaWidgetClass; }
 
@@ -57,8 +57,6 @@ private:
     std::unique_ptr<LivoxCloudVisualizer> _livoxViz;
     std::unique_ptr<Grid> _gridViz;
     // »º´æµ±Ç°×´Ì¬£¬±ãÓÚÔÚÌæ»» Geometry Ê±»Ö¸´
-    int m_currentPointSize = 2;
-    int m_currentOpacity = 100;
     bool m_showNormals = false;
 
 };

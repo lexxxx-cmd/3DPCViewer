@@ -1,4 +1,4 @@
-#include "statuswidget.h"
+#include "ui/StatusWidget.h"
 
 StatusWidget::StatusWidget(QWidget *parent)
 	: QWidget(parent), topicModel(nullptr)

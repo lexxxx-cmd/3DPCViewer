@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <memory>
 #include <QTimer>
-#include "ui_interactionwidget.h"
+#include "ui_InteractionWidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class InteractionWidgetClass; };

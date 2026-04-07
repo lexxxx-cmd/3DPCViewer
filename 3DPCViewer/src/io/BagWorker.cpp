@@ -1,5 +1,5 @@
 #include "BagWorker.h"
-#include "third_party/ros1bag_reader/core/rosbag.h"
+#include "core/rosbag.h"
 #include <QDebug>
 #include <QImage>
 

@@ -3,7 +3,7 @@
 #include <QObject>
 #include <iostream>
 #include <memory>
-#include "pcviewer.h"
+#include "ui/PCViewer.h"
 #include "DataService.h"
 
 class Controller : public QObject

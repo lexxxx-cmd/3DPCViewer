@@ -1,4 +1,4 @@
-#include "pcviewer.h"
+#include "ui/PCViewer.h"
 #include <QThread>
 
 PCViewer::PCViewer(QWidget *parent)

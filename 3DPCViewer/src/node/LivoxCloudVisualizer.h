@@ -6,6 +6,8 @@
 #include <osg/Geometry>
 #include <osg/Geode>
 #include <osg/Point>
+#include <osg/BlendFunc>
+#include <osg/BlendColor>
 
 class LivoxCloudVisualizer {
 public:
@@ -17,17 +19,11 @@ public:
 		geom->setUseDisplayList(false);
 		geom->setUseVertexBufferObjects(true);
 
-		osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array();
-		osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array();
-		colors->push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));
-		geom->setColorArray(colors, osg::Array::BIND_OVERALL);
-		geom->setVertexArray(vertices);
-
+		geom->setVertexArray(new osg::Vec3Array());
+		geom->setColorArray(new osg::Vec4Array(), osg::Array::BIND_PER_VERTEX);
 		geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, 0));
-		geom->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
-		geom->getOrCreateStateSet()->setAttributeAndModes(new osg::Point(2.0f), osg::StateAttribute::ON);
 		_cloudGeode->addDrawable(geom);
+		applyRenderState(geom);
 	}
 	~LivoxCloudVisualizer() {};
 
@@ -42,17 +38,11 @@ public:
 			geom->setUseDisplayList(false);
 			geom->setUseVertexBufferObjects(true);
 
-			osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array();
-			osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array();
-			colors->push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));
-			geom->setColorArray(colors, osg::Array::BIND_OVERALL);
-			geom->setVertexArray(vertices);
-
+			geom->setVertexArray(new osg::Vec3Array());
+			geom->setColorArray(new osg::Vec4Array(), osg::Array::BIND_PER_VERTEX);
 			geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, 0));
-			geom->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
-			geom->getOrCreateStateSet()->setAttributeAndModes(new osg::Point(2.0f), osg::StateAttribute::ON);
 			_cloudGeode->addDrawable(geom);
+			applyRenderState(geom);
 		}
 
 		osg::Geometry* geom = dynamic_cast<osg::Geometry*>(_cloudGeode->getDrawable(0));
@@ -75,9 +65,13 @@ public:
 				1.0f
 			));
 		}
-
+		vertices->dirty();
+		colors->dirty();
 		geom->setVertexArray(vertices);
 		geom->setColorArray(colors, osg::Array::BIND_PER_VERTEX);
+
+		applyRenderState(geom);
+
 		osg::DrawArrays* da = dynamic_cast<osg::DrawArrays*>(geom->getPrimitiveSet(0));
 		if (da) {
 			da->setCount(vertices->size());
@@ -87,10 +81,45 @@ public:
 		geom->dirtyDisplayList();
 		geom->dirtyBound();
 	}
-	void updatePointSize(const int size) {}
-	void updateOpacity(const int opacity) {}
+	void updatePointSize(const int size) {
+		m_currentPointSize = static_cast<float>(size);
+		if (_cloudGeode && _cloudGeode->getNumDrawables() > 0) {
+			applyRenderState(dynamic_cast<osg::Geometry*>(_cloudGeode->getDrawable(0)));
+		}
+	}
+	void updateOpacity(const int opacity) {
+		m_currentOpacity = opacity;
+		if (_cloudGeode && _cloudGeode->getNumDrawables() > 0) {
+			applyRenderState(dynamic_cast<osg::Geometry*>(_cloudGeode->getDrawable(0)));
+		}
+	}
 private:
+	void applyRenderState(osg::Geometry* geom) {
+		if (!geom) return;
+		osg::StateSet* state = geom->getOrCreateStateSet();
+
+		// 应用保存的点大小
+		state->setAttributeAndModes(new osg::Point(m_currentPointSize), osg::StateAttribute::ON);
+
+		// 应用保存的透明度
+		float alpha = static_cast<float>(m_currentOpacity) / 100.0f;
+		if (alpha < 1.0f) {
+			osg::ref_ptr<osg::BlendColor> bc = new osg::BlendColor(osg::Vec4(1.0, 1.0, 1.0, alpha));
+			state->setAttributeAndModes(bc, osg::StateAttribute::ON);
+			state->setAttributeAndModes(new osg::BlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA), osg::StateAttribute::ON);
+			state->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+		}
+		else {
+			state->removeAttribute(osg::StateAttribute::BLENDCOLOR);
+			state->setRenderingHint(osg::StateSet::DEFAULT_BIN);
+			state->setAttributeAndModes(new osg::BlendFunc(), osg::StateAttribute::OFF);
+		}
+		state->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+	}
+
 	osg::Geode* _cloudGeode;
+	int m_currentPointSize = 2;
+	int m_currentOpacity = 100;
 
 };
 #endif 

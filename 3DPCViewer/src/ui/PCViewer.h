@@ -2,9 +2,9 @@
 
 #include <QtWidgets/QMainWindow>
 #include <memory>
-#include "ui_pcviewer.h"
-#include "controlpanelwidget.h"
-#include "visualareawidget.h"
+#include "ui_PCViewer.h"
+#include "ui/ControlPanelWidget.h"
+#include "ui/VisualAreaWidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class PCViewerClass; };
@@ -26,10 +26,9 @@ public slots:
 signals:
 	// control面板
 	void requestLoadFile(const QString& path);
-	void requestProcBag(const QString& path);// 通知上层：用户选了文件
-	void requestUpdateFileSize(const int& size); // 通知下层：文件大小更新了
-	void requestUpdatePointSize(const int& num); // 通知下层：点云数量更新了
-	void requestUpdateFPS(const int& fps); // 通知下层：FPS更新了
+	void requestProcBag(const QString& path);
+	void requestUpdateFileSize(const int& size);
+	void requestUpdateFPS(const int& fps); 
 	void requestShowNormals(const bool& show);
 
 	void pointSizeChanged(const int& value);
@@ -42,7 +41,7 @@ signals:
 	void topicListReady(const std::vector<std::string>& topics);
 	void messageNumReady(int num);
 
-	void progressUpdated(const int value);//通知上层，显示进度更新
+	void progressUpdated(const int value);
 
 	// 错误
 	void errorOccur(const QString& errorMsg);

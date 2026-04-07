@@ -1,4 +1,4 @@
-#include "interactionwidget.h"
+#include "ui/InteractionWidget.h"
 #include <QSlider>
 #include <QCheckBox>
 
@@ -56,7 +56,6 @@ InteractionWidget::InteractionWidget(QWidget *parent)
 	connect(ui->pB_backward, &QPushButton::clicked, this, [this]() {
 		if (cur_messageNum > 0) {
 			ui->HSlider_progress->setValue(cur_messageNum - 1);
-			cur_messageNum--;
 		}
 		else {
 			ui->pB_backward->setEnabled(false);
@@ -66,7 +65,6 @@ InteractionWidget::InteractionWidget(QWidget *parent)
 	connect(ui->pB_forward, &QPushButton::clicked, this, [this]() {
 		if (cur_messageNum < max_messageNum) {
 			ui->HSlider_progress->setValue(cur_messageNum + 1);
-			cur_messageNum++;
 		}
 		else {
 			ui->pB_forward->setEnabled(false);

@@ -1,5 +1,5 @@
-#include "visualareawidget.h"
-#include "ui_visualareawidget.h"
+#include "ui/VisualAreaWidget.h"
+#include "ui_VisualAreaWidget.h"
 #include <QtConcurrent/QtConcurrent>
 #include <osg/StateSet>
 #include <osg/BlendFunc>
@@ -18,7 +18,7 @@ VisualAreaWidget::VisualAreaWidget(QWidget* parent) : QWidget(parent), ui(new Ui
     m_imagePanel = new ImagePanel(this);
     m_imagePanel->move(20, 20);
     m_imagePanel->raise();
-    m_imagePanel->setImage(QPixmap("E:\\C++_pj\\repos\\3DPCViewer\\data\\1774599812.5.jpg"));
+    //m_imagePanel->setImage(QPixmap("E:\\C++_pj\\repos\\3DPCViewer\\data\\1774599812.5.jpg"));
 }
 
 void VisualAreaWidget::initOSG() {
@@ -55,9 +55,7 @@ void VisualAreaWidget::updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, boo
     m_cloudGeode->addDrawable(m_cloudGeom);
 
     // 重新应用之前的点大小和透明度
-    onChangeSizeRequested(m_currentPointSize);
-    onChangeOpacityRequested(m_currentOpacity);
-    m_cloudGeode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    
 
     m_root->addChild(m_cloudGeode);
 
@@ -68,30 +66,17 @@ void VisualAreaWidget::updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, boo
 }
 
 void VisualAreaWidget::onChangeSizeRequested(const int& size) {
-    m_currentPointSize = size;
-    if (m_cloudGeom.valid()) {
-        m_cloudGeom->getOrCreateStateSet()->setAttribute(new osg::Point(static_cast<float>(size)), osg::StateAttribute::ON);
-        m_osgWidget->update();
+    if (_livoxViz)
+    {
+        _livoxViz->updatePointSize(size);
     }
+    m_osgWidget->update();
 }
 
 void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
-    m_currentOpacity = opacity;
-    if (!m_cloudGeom.valid()) return;
-
-    float alpha = static_cast<float>(opacity) / 100.0f;
-    osg::StateSet* state = m_cloudGeom->getOrCreateStateSet();
-
-    if (alpha < 1.0f) {
-        osg::ref_ptr<osg::BlendColor> bc = new osg::BlendColor(osg::Vec4(1.0, 1.0, 1.0, alpha));
-        state->setAttributeAndModes(bc, osg::StateAttribute::ON);
-        state->setAttributeAndModes(new osg::BlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA), osg::StateAttribute::ON);
-        state->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-    }
-    else {
-        state->removeAttribute(osg::StateAttribute::BLENDCOLOR);
-        state->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::OFF);
-        state->setRenderingHint(osg::StateSet::DEFAULT_BIN);
+    if (_livoxViz)
+    {
+        _livoxViz->updateOpacity(opacity);
     }
     m_osgWidget->update();
 }

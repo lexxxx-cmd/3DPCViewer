@@ -2,10 +2,10 @@
 
 #include <QWidget>
 #include <memory>
-#include "ui_controlpanelwidget.h"
-#include "datawidget.h"
-#include "statuswidget.h"
-#include "interactionwidget.h"
+#include "ui_ControlPanelWidget.h"
+#include "ui/DataWidget.h"
+#include "ui/StatusWidget.h"
+#include "ui/InteractionWidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class ControlPanelWidgetClass; };

@@ -1,5 +1,5 @@
-#include "ImagePanel.h"
-#include "ui_ImagePanel.h"
+#include "ui/ImagePanelWidget.h"
+#include "ui_ImagePanelWidget.h"
 
 ImagePanel::ImagePanel(QWidget* parent) : QWidget(parent), ui(new Ui::ImagePanel) {
     ui->setupUi(this);

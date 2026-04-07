@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <memory>
 #include <QStandardItemModel>
-#include "ui_statuswidget.h"
+#include "ui_StatusWidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class StatusWidgetClass; };

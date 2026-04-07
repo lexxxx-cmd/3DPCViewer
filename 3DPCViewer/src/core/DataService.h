@@ -2,7 +2,7 @@
 
 #include <QObject>
 #include <QThread>
-#include "BagWorker.h"
+#include "io/BagWorker.h"
 
 class DataService : public QObject
 {

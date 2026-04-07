@@ -1,4 +1,4 @@
-#include "datawidget.h"
+#include "ui/DataWidget.h"
 #include <QFileDialog>
 
 DataWidget::DataWidget(QWidget *parent)

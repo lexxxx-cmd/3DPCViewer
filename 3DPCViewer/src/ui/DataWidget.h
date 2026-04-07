@@ -2,7 +2,7 @@
 
 #include <QWidget>
 #include <memory>
-#include "ui_datawidget.h"
+#include "ui_DataWidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class DataWidgetClass; };
