@@ -1,6 +1,5 @@
 #include "visualareawidget.h"
 #include "ui_visualareawidget.h"
-#include "DataLoader.h"
 #include <QtConcurrent/QtConcurrent>
 #include <osg/StateSet>
 #include <osg/BlendFunc>
@@ -27,6 +26,7 @@ void VisualAreaWidget::initOSG() {
     _camViz = std::make_unique<OdomCameraVisualizer>();
     _pathViz = std::make_unique<OdomPathVisualizer>();
     _gridViz = std::make_unique<Grid>(100);
+    _livoxViz = std::make_unique<LivoxCloudVisualizer>();
 
     m_root = new osg::Group();
     osgViewer::Viewer* viewer = m_osgWidget->getOsgViewer();
@@ -34,6 +34,7 @@ void VisualAreaWidget::initOSG() {
     m_root->addChild(_camViz->getRootNode());
     m_root->addChild(_pathViz->getNode());
     m_root->addChild(_gridViz->getGridNode());
+    m_root->addChild(_livoxViz->getNode());
 
     viewer->setSceneData(m_root);
     viewer->setCameraManipulator(new osgGA::TrackballManipulator);
@@ -104,9 +105,12 @@ VisualAreaWidget::~VisualAreaWidget() {
     m_osgWidget = nullptr;
 }
 
-void VisualAreaWidget::onCloudFrameReady(const LivoxCloudFrame& frame) {
-    osg::ref_ptr<osg::Geometry> geom = DataLoader::convertToOsgGeometry(frame);
-    updateCloudGeometry(geom, true);
+void VisualAreaWidget::onCloudFrameReady(const GeneralCloudFrame& frame) {
+    if (_livoxViz)
+    {
+        _livoxViz->updateCloud(frame.points);
+    }
+    m_osgWidget->update();
 }
 
 void VisualAreaWidget::onImageFrameReady() {

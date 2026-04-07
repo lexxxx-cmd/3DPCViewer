@@ -23,7 +23,7 @@ void BagWorker::processBag(const QString& bagPath) {
     for (const std::string&topic : topicList) {
 		qDebug() << "Bag 中可用 Topic:" << QString::fromStdString(topic);
         if (m_bagCache.find(topic) != m_bagCache.end()) {
-			// 可能属于一个新的场景包，提示清空缓存重新导入 TODO
+			// TODO
             m_bagCache.clear();
 			return;
 		}
@@ -44,7 +44,7 @@ void BagWorker::updateProgress(const int value) {
         if (value < m_bagCache[topicItem.first].size()) {
             const auto& payload = m_bagCache[topicItem.first][value];
             if (topicItem.first == "/livox/lidar") {
-                LivoxCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
+                GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
                 emit cloudFrameReady(frame);
             }
             else if (topicItem.first == "/usb_cam/image_raw/compressed") {
@@ -60,35 +60,39 @@ void BagWorker::updateProgress(const int value) {
     }
 }
 
-// ----------------- 二进制解析算法 ----------------- //
-
-LivoxCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t length) {
-    LivoxCloudFrame frame;
+GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t length) {
+    GeneralCloudFrame frame;
     size_t offset = 0;
 
-    // 1. 跨过 std_msgs/Header
+    // std_msgs/Header
     offset += 12; // seq(4) + stamp_sec(4) + stamp_nsec(4)
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
     offset += frame_id_len;
 
-    // 2. 跨过 Livox CustomMsg Header
+    // Livox CustomMsg Header
     frame.timestamp = *(uint64_t*)(payload + offset); offset += 8; // timebase
     uint32_t point_num = *(uint32_t*)(payload + offset); offset += 4; // point_num
     offset += 1; // lidar_id
     offset += 3; // rsvd
 
-    // 3. 解析动态数组长度
     uint32_t array_elements = *(uint32_t*)(payload + offset); offset += 4;
 
-    if (offset + point_num * sizeof(LivoxPoint) > length) {
-        qWarning() << "严重：此帧 payload 数据损坏或不完整，丢弃！";
-        return frame; // 返回空帧
-    }
-
-    // 4. 暴力内存拷贝！(极其快速)
     frame.points.resize(point_num);
-    std::memcpy(frame.points.data(), payload + offset, point_num * sizeof(LivoxPoint));
+    for (int i = 0; i < point_num; i++) {
+        const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(payload + offset + i * sizeof(LivoxPoint));
+        GeneralPointI tempPoint;
+        
+        tempPoint.x = src->x;
+        tempPoint.y = src->y;
+        tempPoint.z = src->z;
+        tempPoint.reflectivity = src->reflectivity;
+        frame.points[i].pointI = tempPoint;
+        // RGB 颜色
+        frame.points[i].r = JET_LUT[tempPoint.reflectivity].r;
+        frame.points[i].g = JET_LUT[tempPoint.reflectivity].g;
+        frame.points[i].b = JET_LUT[tempPoint.reflectivity].b;
+    }
 
     return frame;
 }

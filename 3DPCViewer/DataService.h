@@ -21,7 +21,7 @@ public slots:
 
 signals:
 	// 将解析好的数据抛给前端
-	void cloudFrameReady(const LivoxCloudFrame& frame);
+	void cloudFrameReady(const GeneralCloudFrame& frame);
 	void imageFrameReady(const ImageFrame& frame);
 	void odomFrameReady(const OdomFrame& frame);
 	void progressUpdated(int percent);

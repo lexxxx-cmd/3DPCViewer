@@ -24,7 +24,7 @@ public slots:
 
 signals:
     // 将解析好的数据抛给前端
-    void cloudFrameReady(const LivoxCloudFrame& frame);
+    void cloudFrameReady(const GeneralCloudFrame& frame);
     void imageFrameReady(const ImageFrame& frame);
     void odomFrameReady(const OdomFrame& frame);
     void progressUpdated(int percent);
@@ -40,8 +40,8 @@ private:
     std::atomic<bool> m_stopFlag;
     std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache; // 缓存已解析的数据，按topic索引
 
-    // 二进制剥离核心算法
-    LivoxCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
+    // 二进制解析
+    GeneralCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
     ImageFrame parseImagePayload(const uint8_t* payload, size_t length);
     OdomFrame parseOdomPayload(const uint8_t* payload, size_t length);
 };

@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    qRegisterMetaType<LivoxCloudFrame>("LivoxCloudFrame");
+    qRegisterMetaType<GeneralCloudFrame>("GeneralCloudFrame");
     qRegisterMetaType<ImageFrame>("ImageFrame");
     qRegisterMetaType<OdomFrame>("OdomFrame");
     qRegisterMetaType<std::vector<std::string>>("std::vector<std::string>");

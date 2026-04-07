@@ -36,7 +36,7 @@ signals:
 	void pointOpacityChanged(const int& value);
 
 	// 转发service面板数据
-	void cloudFrameReady(const LivoxCloudFrame& frame);
+	void cloudFrameReady(const GeneralCloudFrame& frame);
 	void imageFrameReady(const ImageFrame& frame);
 	void odomFrameReady(const OdomFrame& frame);
 	void topicListReady(const std::vector<std::string>& topics);

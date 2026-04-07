@@ -48,7 +48,6 @@ public:
 		osg::Geometry* geom = dynamic_cast<osg::Geometry*>(_pathGeode->getDrawable(0));
 		if (!geom) return;
 
-		// 2. 更新绘制计数 (关键！)
 		osg::DrawArrays* da = dynamic_cast<osg::DrawArrays*>(geom->getPrimitiveSet(0));
 		if (da) {
 			if (index >= max_odomNum) {

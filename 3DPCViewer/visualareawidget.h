@@ -15,6 +15,7 @@
 #include "BagDataTypes.h"
 #include "OdomCameraVisualizer.h"
 #include "OdomPathVisualizer.h"
+#include "LivoxCloudVisualizer.h"
 #include "Grid.h"
 #include "ImagePanel.h"
 
@@ -30,7 +31,7 @@ public slots:
     void onChangeSizeRequested(const int& size);
     void onChangeOpacityRequested(const int& opacity);
 
-    void onCloudFrameReady(const LivoxCloudFrame& frame);
+    void onCloudFrameReady(const GeneralCloudFrame& frame);
     void onImageFrameReady();
     void onOdomFrameReady(const OdomFrame& frame);
 
@@ -53,6 +54,7 @@ private:
     
     std::unique_ptr<OdomCameraVisualizer> _camViz;
     std::unique_ptr<OdomPathVisualizer> _pathViz;
+    std::unique_ptr<LivoxCloudVisualizer> _livoxViz;
     std::unique_ptr<Grid> _gridViz;
     // »º´æµ±Ç°×´Ì¬£¬±ãÓÚÔÚÌæ»» Geometry Ê±»Ö¸´
     int m_currentPointSize = 2;

@@ -45,6 +45,7 @@ set(ROSBAG_FOURCE
     BagDataTypes.h
     OdomCameraVisualizer.h
     OdomPathVisualizer.h
+    LivoxCloudVisualizer.h
     DataService.h
     DataService.cpp
     Controller.h
@@ -97,7 +98,6 @@ set(PROJECT_SOURCES
     ${PROJECT_INTERACT_SOURCES}
     ${PROJECT_CONGTRAL_SOURCES}
     ${PROJECT_VISUAL_SOURCES}
-    DataLoader.h
     3DPCViewer.rc
     ${THIRD_PARTY_SOURCE}
     ${ROSBAG_FOURCE}
