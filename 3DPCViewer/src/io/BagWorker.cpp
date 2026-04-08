@@ -47,6 +47,10 @@ void BagWorker::updateProgress(const int value) {
                 GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
                 emit cloudFrameReady(frame);
             }
+            else if (topicItem.first == "/cloud_registered") {
+                GeneralCloudFrame frame = parseSensorPC2Payload(payload.data(), payload.size());
+                emit cloudFrameReady(frame);
+            }
             else if (topicItem.first == "/usb_cam/image_raw/compressed") {
                 ImageFrame frame = parseImagePayload(payload.data(), payload.size());
                 emit imageFrameReady(frame);
@@ -96,6 +100,106 @@ GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t le
 
     return frame;
 }
+
+GeneralCloudFrame BagWorker::parseSensorPC2Payload(const uint8_t* payload, size_t length) {
+    GeneralCloudFrame frame;
+    size_t offset = 0;
+
+    // 解析Header
+    offset += 12; // seq(4) + stamp_sec(4) + stamp_nsec(4)
+    uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
+    frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+    offset += frame_id_len;
+
+    // 解析height和width
+    uint32_t height = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t width = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t point_num = height * width;
+
+    // fields数组
+    uint32_t fields_size = *(uint32_t*)(payload + offset); offset += 4;
+    struct FieldInfo {
+        std::string name;
+        uint32_t offset;
+        uint8_t datatype;
+        uint32_t count;
+    };
+    std::vector<FieldInfo> fields;
+    for (uint32_t i = 0; i < fields_size; ++i) {
+        uint32_t name_len = *(uint32_t*)(payload + offset); offset += 4;
+        std::string name((const char*)(payload + offset), name_len);
+        offset += name_len;
+        uint32_t field_offset = *(uint32_t*)(payload + offset); offset += 4;
+        uint8_t datatype = *(uint8_t*)(payload + offset); offset += 1;
+        uint32_t count = *(uint32_t*)(payload + offset); offset += 4;
+        fields.push_back({ name, field_offset, datatype, count });
+    }
+
+    bool is_bigendian = *(uint8_t*)(payload + offset); offset += 1;
+    uint32_t point_step = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t row_step = *(uint32_t*)(payload + offset); offset += 4;
+
+    uint32_t data_len = *(uint32_t*)(payload + offset); offset += 4;
+    const uint8_t* data_ptr = payload + offset;
+    offset += data_len;
+
+    bool is_dense = *(uint8_t*)(payload + offset); offset += 1;
+
+    int x_idx = -1, y_idx = -1, z_idx = -1, rgb_idx = -1, reflectivity_idx = -1;
+    for (size_t i = 0; i < fields.size(); ++i) {
+        if (fields[i].name == "x") x_idx = i;
+        if (fields[i].name == "y") y_idx = i;
+        if (fields[i].name == "z") z_idx = i;
+        if (fields[i].name == "rgb" || fields[i].name == "rgba") rgb_idx = i;
+        if (fields[i].name == "intensity" || fields[i].name == "reflectivity") reflectivity_idx = i;
+    }
+
+    // 防止 data_len 不足导致的内存越界崩溃
+    if (data_len < point_num * point_step) {
+        qWarning() << "PointCloud2 data_len 异常! 预期至少:" << point_num * point_step << "实际:" << data_len;
+        point_num = data_len / point_step;
+    }
+
+    frame.points.resize(point_num);
+    for (uint32_t i = 0; i < point_num; ++i) {
+        size_t base = i * point_step;
+        GeneralPointI pt;
+
+        if (x_idx >= 0) pt.x = *(float*)(data_ptr + base + fields[x_idx].offset);
+        if (y_idx >= 0) pt.y = *(float*)(data_ptr + base + fields[y_idx].offset);
+        if (z_idx >= 0) pt.z = *(float*)(data_ptr + base + fields[z_idx].offset);
+
+        if (reflectivity_idx >= 0) {
+            uint8_t dtype = fields[reflectivity_idx].datatype;
+            if (dtype == 7) { // FLOAT32
+                pt.reflectivity = (uint8_t)(*(float*)(data_ptr + base + fields[reflectivity_idx].offset));
+            }
+            else if (dtype == 2) { // UINT8
+                pt.reflectivity = *(uint8_t*)(data_ptr + base + fields[reflectivity_idx].offset);
+            }
+            else {
+                pt.reflectivity = 0; // 默认值
+            }
+        }
+        frame.points[i].pointI = pt;
+
+        // 解析RGB
+        if (rgb_idx >= 0) {
+            uint32_t rgb = *(uint32_t*)(data_ptr + base + fields[rgb_idx].offset);
+            frame.points[i].r = (rgb >> 16) & 0xFF;
+            frame.points[i].g = (rgb >> 8) & 0xFF;
+            frame.points[i].b = rgb & 0xFF;
+        }
+        else {
+            frame.points[i].r = pt.reflectivity;
+            frame.points[i].g = pt.reflectivity;
+            frame.points[i].b = pt.reflectivity;
+        }
+    }
+
+    return frame;
+}
+
 
 ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
     ImageFrame frame;
