@@ -29,6 +29,7 @@
 #include <memory>
 #include <numeric>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "messages/messages.h"
@@ -131,6 +132,10 @@ void Rosbag::readBagInfo() {
 }
 
 void Rosbag::readData() {
+    // Only read chunk data once; subsequent calls are no-ops.
+    if (m_dataLoaded.exchange(true)) {
+        return;
+    }
     std::for_each(chunk_info_records_.cbegin(), chunk_info_records_.cend(),
                   [&](const ChunkInfo chunk_info) {
                       rosbag_.seekg(chunk_info.chunk_pos);
@@ -346,14 +351,55 @@ std::vector<std::vector<uint8_t>> Rosbag::getRawPayloads(const std::string& topi
     auto conn_id = topic_to_conn_id_.at(topic_name);
     auto& conn_info = connections_.at(conn_id);
 
-    this->readData(); // 确保索引已载入
+    this->readData(); // ensures metadata is loaded (idempotent)
 
-    payloads.reserve(conn_info.messages_info.size());
-    for (const auto& msg_info : conn_info.messages_info) {
-        rosbag_.seekg(msg_info.buffer_offset);
-        std::vector<uint8_t> buffer(msg_info.data_len);
-        rosbag_.read(reinterpret_cast<char*>(buffer.data()), msg_info.data_len);
-        payloads.emplace_back(std::move(buffer));
+    const auto& messages_info = conn_info.messages_info;
+    const size_t n = messages_info.size();
+    if (n == 0) {
+        return payloads;
     }
+
+    // Pre-allocate result slots so each thread writes to its own index.
+    payloads.resize(n);
+
+    // Use one thread per hardware core, capped to the number of messages.
+    const unsigned int hw_threads = std::thread::hardware_concurrency();
+    const unsigned int num_threads =
+        std::max(1u, std::min(static_cast<unsigned int>(n), hw_threads));
+
+    const size_t chunk_size = (n + num_threads - 1) / num_threads;
+
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
+
+    for (unsigned int t = 0; t < num_threads; ++t) {
+        const size_t start = t * chunk_size;
+        const size_t end   = std::min(start + chunk_size, n);
+        if (start >= end) break;
+
+        // Each thread opens its own file handle to avoid seek/read contention.
+        threads.emplace_back([&, start, end]() {
+            std::ifstream local_stream(rosbag_path_,
+                                       std::ios::in | std::ios::binary);
+            if (!local_stream.is_open()) {
+                std::cerr << "getRawPayloads: failed to open " << rosbag_path_
+                          << " in worker thread" << std::endl;
+                return;
+            }
+            for (size_t i = start; i < end; ++i) {
+                const auto& msg_info = messages_info[i];
+                std::vector<uint8_t> buf(static_cast<size_t>(msg_info.data_len));
+                local_stream.seekg(msg_info.buffer_offset);
+                local_stream.read(reinterpret_cast<char*>(buf.data()),
+                                  msg_info.data_len);
+                payloads[i] = std::move(buf);
+            }
+        });
+    }
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
     return payloads;
 }

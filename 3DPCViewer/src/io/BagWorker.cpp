@@ -2,6 +2,9 @@
 #include "core/rosbag.h"
 #include <QDebug>
 #include <QImage>
+#include <execution>
+#include <future>
+#include <numeric>
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
 
@@ -12,29 +15,51 @@ void BagWorker::stopProcessing() {
 void BagWorker::processBag(const QString& bagPath) {
     m_stopFlag = false;
 
-    // ¼ÓÔØ Bag Ë÷Òý
+    // Open bag once to retrieve the topic list (metadata only, very fast).
     Rosbag bag(bagPath.toStdString());
     std::vector<std::string> topicList = bag.getAvailableTopics();
 
     emit topicListReady(topicList);
 
-    // ÄÃµ½´¿´âµÄ¶þ½øÖÆ´óÊý×é
-    int max_size = 0;
-    for (const std::string&topic : topicList) {
-		qDebug() << "Bag ÖÐ¿ÉÓÃ Topic:" << QString::fromStdString(topic);
+    // Guard: if the cache already contains data from this bag, clear it first.
+    for (const std::string& topic : topicList) {
         if (m_bagCache.find(topic) != m_bagCache.end()) {
-			// TODO
+            // TODO
             m_bagCache.clear();
-			return;
-		}
-        m_bagCache[topic] = bag.getRawPayloads(topic);
-        max_size = std::max(max_size, (int)m_bagCache[topic].size());
-	}
-    // ±£Ö¤ÄÃµ½µÄ×î´óÏûÏ¢Êý²»ÎªÁã£¬·ñÔòÖ±½Ó½áÊø
+            return;
+        }
+    }
+
+    // Launch one async task per topic so their payload reads run in parallel.
+    // Each task opens its own Rosbag (and therefore its own file descriptor)
+    // to avoid contention on the shared ifstream.
+    const std::string pathStr = bagPath.toStdString();
+    using TopicPayloads = std::pair<std::string, std::vector<std::vector<uint8_t>>>;
+    std::vector<std::future<TopicPayloads>> futures;
+    futures.reserve(topicList.size());
+
+    for (const std::string& topic : topicList) {
+        futures.push_back(std::async(std::launch::async,
+            [pathStr, topic]() -> TopicPayloads {
+                qDebug() << "Bag ä¸­å¯ç”¨ Topic:" << QString::fromStdString(topic);
+                Rosbag topicBag(pathStr);
+                return { topic, topicBag.getRawPayloads(topic) };
+            }));
+    }
+
+    // Collect results and build the cache.
+    int max_size = 0;
+    for (auto& fut : futures) {
+        auto [topic, payloads] = fut.get();
+        max_size = std::max(max_size, static_cast<int>(payloads.size()));
+        m_bagCache[topic] = std::move(payloads);
+    }
+
+    // Verify that at least one message was read.
     if (max_size == 0) {
         emit finished();
         return;
-	}
+    }
     emit messageNumReady(max_size);
     emit finished();
 }
@@ -79,20 +104,27 @@ GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t le
     uint32_t array_elements = *(uint32_t*)(payload + offset); offset += 4;
 
     frame.points.resize(point_num);
-    for (int i = 0; i < point_num; i++) {
-        const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(payload + offset + i * sizeof(LivoxPoint));
-        GeneralPointI tempPoint;
-        
-        tempPoint.x = src->x;
-        tempPoint.y = src->y;
-        tempPoint.z = src->z;
-        tempPoint.reflectivity = src->reflectivity;
-        frame.points[i].pointI = tempPoint;
-        // RGB ÑÕÉ«
-        frame.points[i].r = JET_LUT[tempPoint.reflectivity].r;
-        frame.points[i].g = JET_LUT[tempPoint.reflectivity].g;
-        frame.points[i].b = JET_LUT[tempPoint.reflectivity].b;
-    }
+
+    // Capture offset by value so the parallel lambda reads a stable snapshot.
+    const size_t pointsOffset = offset;
+
+    // Use an index range and parallel execution: each point conversion is independent.
+    std::vector<uint32_t> indices(point_num);
+    std::iota(indices.begin(), indices.end(), 0u);
+    std::for_each(std::execution::par_unseq,
+                  indices.begin(), indices.end(),
+                  [&frame, payload, pointsOffset](uint32_t i) {
+                      const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(
+                          payload + pointsOffset + i * sizeof(LivoxPoint));
+                      GeneralPointIRGB& pt = frame.points[i];
+                      pt.pointI.x            = src->x;
+                      pt.pointI.y            = src->y;
+                      pt.pointI.z            = src->z;
+                      pt.pointI.reflectivity = src->reflectivity;
+                      pt.r = JET_LUT[src->reflectivity].r;
+                      pt.g = JET_LUT[src->reflectivity].g;
+                      pt.b = JET_LUT[src->reflectivity].b;
+                  });
 
     return frame;
 }
@@ -101,21 +133,21 @@ ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
     ImageFrame frame;
     size_t offset = 0;
 
-    // 1. ¿ç¹ý Header
+    // 1. ï¿½ï¿½ï¿½ Header
     offset += 12;
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     offset += frame_id_len;
 
-    // 2. ¿ç¹ý format ×Ö·û´®
+    // 2. ï¿½ï¿½ï¿½ format ï¿½Ö·ï¿½ï¿½ï¿½
     uint32_t format_len = *(uint32_t*)(payload + offset); offset += 4;
     offset += format_len;
 
-    // 3. ¶ÁÈ¡Í¼ÏñÊý¾Ý³¤¶È
+    // 3. ï¿½ï¿½È¡Í¼ï¿½ï¿½ï¿½ï¿½ï¿½Ý³ï¿½ï¿½ï¿½
     uint32_t data_len = *(uint32_t*)(payload + offset); offset += 4;
     if (offset + data_len > length) {
-        return frame; // Ô½½ç±£»¤
+        return frame; // Ô½ï¿½ç±£ï¿½ï¿½
     }
-    // 4. Qt Ô­Éú½âÑ¹ JPEG/PNG
+    // 4. Qt Ô­ï¿½ï¿½ï¿½ï¿½Ñ¹ JPEG/PNG
     frame.image.loadFromData(payload + offset, data_len);
 
     return frame;
@@ -128,7 +160,7 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
-    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec; // ºÏ³ÉÄÉÃë¼¶Ê±¼ä´Á
+    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec; // ï¿½Ï³ï¿½ï¿½ï¿½ï¿½ë¼¶Ê±ï¿½ï¿½ï¿½
 
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     odom.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
@@ -158,12 +190,12 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     odom.twist.angular_y = *(double*)(payload + offset); offset += 8;
     odom.twist.angular_z = *(double*)(payload + offset); offset += 8;
 
-    // Ìø¹ý Twist µÄÐ­·½²î¾ØÕó (36 * 8 ×Ö½Ú)
+    // ï¿½ï¿½ï¿½ï¿½ Twist ï¿½ï¿½Ð­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (36 * 8 ï¿½Ö½ï¿½)
     offset += (36 * 8);
 
-    // Ô½½ç¼ì²é
+    // Ô½ï¿½ï¿½ï¿½ï¿½
     if (offset > length) {
-        qWarning() << "Odometry Êý¾Ý½âÎöÔ½½ç£¬¿ÉÄÜÊý¾Ý°ü²»ÍêÕû£¡";
+        qWarning() << "Odometry ï¿½ï¿½ï¿½Ý½ï¿½ï¿½ï¿½Ô½ï¿½ç£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½";
     }
 
 
