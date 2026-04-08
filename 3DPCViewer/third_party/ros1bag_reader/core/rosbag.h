@@ -21,6 +21,7 @@
 // SOFTWARE.
 #pragma once
 
+#include <atomic>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -44,7 +45,7 @@ struct MesssageDataInfo {
     int conn_id{};
     int64_t time{};
 
-    int data_len{};// ¼ÇÂ¼Êý¾Ý³¤¶È£¬±ãÓÚºóÐø¶ÁÈ¡Êý¾Ý
+    int data_len{};// ï¿½ï¿½Â¼ï¿½ï¿½ï¿½Ý³ï¿½ï¿½È£ï¿½ï¿½ï¿½ï¿½Úºï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½
 };
 
 struct ConnectionInfo {
@@ -67,7 +68,7 @@ public:
     void saveDataOnTopic(const std::string &topic_name,
                          const std::string &output_path);
 
-    std::vector<std::vector<uint8_t>> getRawPayloads(const std::string& topic_name);// ÌáÈ¡topicÔ­Ê¼¶þ½øÖÆ
+    std::vector<std::vector<uint8_t>> getRawPayloads(const std::string& topic_name);// ï¿½ï¿½È¡topicÔ­Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 private:
     void readString(std::string &str, int n_bytes);
@@ -103,4 +104,7 @@ private:
     std::map<std::string, int> topic_to_conn_id_;
     std::vector<std::string> chunk_compression_types_;
     std::vector<ChunkInfo> chunk_info_records_;
+
+    // Guard against redundant readData() calls when multiple topics are read
+    std::atomic<bool> m_dataLoaded{false};
 };

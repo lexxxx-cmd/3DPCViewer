@@ -22,3 +22,6 @@ target_compile_features(rosbag_reader_core PUBLIC cxx_std_17)
 target_include_directories(rosbag_reader_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
                            PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 target_link_libraries(rosbag_reader_core PUBLIC messages)
+
+find_package(Threads REQUIRED)
+target_link_libraries(rosbag_reader_core PRIVATE Threads::Threads)
