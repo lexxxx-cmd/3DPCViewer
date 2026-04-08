@@ -69,7 +69,7 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
         "CREATE INDEX IF NOT EXISTS timestamp_idx ON messages (timestamp);"));
 
     m_initialized = true;
-    qDebug() << "DatabaseWorker: database initialised at" << dbPath;
+    qDebug() << "DatabaseWorker: database initialized at" << dbPath;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
 void DatabaseWorker::saveMessage(const RawBagMessage& msg)
 {
     if (!m_initialized) {
-        qWarning() << "DatabaseWorker: not initialised, dropping message for"
+        qWarning() << "DatabaseWorker: not initialized, dropping message for"
                    << msg.topicName;
         return;
     }
