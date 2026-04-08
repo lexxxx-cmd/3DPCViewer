@@ -76,6 +76,10 @@ void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
     m_osgWidget->update();
 }
 
+void VisualAreaWidget::onChangeBgColorRequested(const QColor& color) {
+	m_osgWidget->getOsgViewer()->getCamera()->setClearColor(osg::Vec4(color.redF(), color.greenF(), color.blueF(), 1.0f));
+	m_osgWidget->update();
+}
 
 VisualAreaWidget::~VisualAreaWidget() {
     delete ui;

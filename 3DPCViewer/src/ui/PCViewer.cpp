@@ -21,6 +21,7 @@ PCViewer::PCViewer(QWidget *parent)
 
     connect(ui->ControlWidget, &ControlPanelWidget::pointSizeChanged, ui->ShowWidget, &VisualAreaWidget::onChangeSizeRequested);
     connect(ui->ControlWidget, &ControlPanelWidget::pointOpacityChanged, ui->ShowWidget, &VisualAreaWidget::onChangeOpacityRequested);
+    connect(ui->ControlWidget, &ControlPanelWidget::bgColorChanged, ui->ShowWidget, &VisualAreaWidget::onChangeBgColorRequested);
 
 }
 

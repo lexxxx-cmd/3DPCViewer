@@ -30,6 +30,7 @@ signals:
 	void pointSizeChanged(const int& value);
 	void pointOpacityChanged(const int& value);
 	void progressUpdated(const int value);
+	void bgColorChanged(const QColor& color);
 
 
 private:

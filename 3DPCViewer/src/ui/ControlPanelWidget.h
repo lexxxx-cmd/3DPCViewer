@@ -36,6 +36,7 @@ signals:
 
 	void pointSizeChanged(const int& value);
 	void pointOpacityChanged(const int& value);
+	void bgColorChanged(const QColor& color);
 
 	void topicListReady(const std::vector<std::string>& topics);
 	void messageNumReady(int num);
