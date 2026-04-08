@@ -65,6 +65,8 @@ public:
     void printInfo() const;
     void printAvailableTopics() const;
     std::vector<std::string> getAvailableTopics() const;
+    std::string getTopicType(const std::string& topic_name) const;
+    std::vector<int64_t> getMessageTimestamps(const std::string& topic_name) const;
     void saveDataOnTopic(const std::string &topic_name,
                          const std::string &output_path);
 

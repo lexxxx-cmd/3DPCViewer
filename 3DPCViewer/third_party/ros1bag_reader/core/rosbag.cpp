@@ -296,6 +296,28 @@ std::vector<std::string> Rosbag::getAvailableTopics() const {
     return topics;
 }
 
+std::string Rosbag::getTopicType(const std::string& topic_name) const {
+    auto it = topic_to_conn_id_.find(topic_name);
+    if (it == topic_to_conn_id_.cend()) {
+        return {};
+    }
+    return connections_.at(it->second).msg_type;
+}
+
+std::vector<int64_t> Rosbag::getMessageTimestamps(const std::string& topic_name) const {
+    auto it = topic_to_conn_id_.find(topic_name);
+    if (it == topic_to_conn_id_.cend()) {
+        return {};
+    }
+    const auto& messages_info = connections_.at(it->second).messages_info;
+    std::vector<int64_t> times;
+    times.reserve(messages_info.size());
+    for (const auto& info : messages_info) {
+        times.push_back(info.time);
+    }
+    return times;
+}
+
 void Rosbag::saveDataOnTopic(const std::string &topic_name,
                              const std::string &output_path) {
     if (topic_to_conn_id_.find(topic_name) != topic_to_conn_id_.cend()) {

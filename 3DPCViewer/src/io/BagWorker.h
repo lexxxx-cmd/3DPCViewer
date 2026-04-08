@@ -8,41 +8,42 @@
 
 class BagWorker : public QObject
 {
-	Q_OBJECT
+Q_OBJECT
 
 public:
-	explicit BagWorker(QObject *parent = nullptr);
-	~BagWorker() = default;
+explicit BagWorker(QObject *parent = nullptr);
+~BagWorker() = default;
 
 public slots:
-    // 后台解包的入口槽函数
-    void processBag(const QString& bagPath);
+    // bagIndex: 1-based counter supplied by DataService to distinguish imports
+    void processBag(const QString& bagPath, int bagIndex);
 
     void updateProgress(const int value);
-    // 用于安全中止读取
     void stopProcessing();
 
 signals:
-    // 将解析好的数据抛给前端
     void cloudFrameReady(const GeneralCloudFrame& frame);
     void imageFrameReady(const ImageFrame& frame);
     void odomFrameReady(const OdomFrame& frame);
     void progressUpdated(int percent);
     void topicListReady(const std::vector<std::string>& topics);
     void messageNumReady(int num);
-    // 错误
+
+    // CDR-encoded message ready for DatabaseWorker
+    void parsedMessageReady(const RawBagMessage& msg);
+
     void errorOccur(const QString& errorMsg);
 
-    // 任务结束信号
     void finished();
 
 private:
     std::atomic<bool> m_stopFlag;
-    std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache; // 缓存已解析的数据，按topic索引
+    std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache;
+    std::unordered_map<std::string, std::vector<int64_t>>              m_bagTimestamps;
+    std::unordered_map<std::string, std::string>                       m_bagTopicTypes;
 
-    // 二进制解析
     GeneralCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
     GeneralCloudFrame parseSensorPC2Payload(const uint8_t* payload, size_t length);
-    ImageFrame parseImagePayload(const uint8_t* payload, size_t length);
-    OdomFrame parseOdomPayload(const uint8_t* payload, size_t length);
+    ImageFrame        parseImagePayload(const uint8_t* payload, size_t length);
+    OdomFrame         parseOdomPayload(const uint8_t* payload, size_t length);
 };
