@@ -1,6 +1,7 @@
 #include "ui/InteractionWidget.h"
 #include <QSlider>
 #include <QCheckBox>
+#include <QColorDialog>
 
 InteractionWidget::InteractionWidget(QWidget *parent)
 	: QWidget(parent)
@@ -86,6 +87,11 @@ InteractionWidget::InteractionWidget(QWidget *parent)
 			m_timer->stop();
 		}
 	});
+	connect(ui->pB_set_bgColor, &QPushButton::clicked, this, [this]() {
+		QColor color = QColorDialog::getColor(Qt::black, this, "颜色窗口标题");
+		emit bgColorChanged(color);
+		});
+
 	onSizeSliderChanged(ui->HSlider_size->value());
 	onOpacitySliderChanged(ui->HSlider_opacity->value());
 

@@ -23,6 +23,9 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 	connect(ui->InterWidget, &InteractionWidget::pointOpacityChanged, this, [this](const int& value) {
 		emit pointOpacityChanged(value);
 		});
+	connect(ui->InterWidget, &InteractionWidget::bgColorChanged, this, [this](const QColor& color) {
+		emit bgColorChanged(color);
+		});
 	/*
 	connect(ui->InterWidget, &InteractionWidget::requestShowNormals, this, [this](const bool& show) {
 		emit requestShowNormals(show);

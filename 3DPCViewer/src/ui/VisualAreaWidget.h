@@ -30,6 +30,7 @@ public:
 public slots:
     void onChangeSizeRequested(const int& size);
     void onChangeOpacityRequested(const int& opacity);
+    void onChangeBgColorRequested(const QColor& color);
 
     void onCloudFrameReady(const GeneralCloudFrame& frame);
     void onOdomFrameReady(const OdomFrame& frame);
