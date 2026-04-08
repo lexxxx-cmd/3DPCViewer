@@ -23,6 +23,9 @@ public:
 		geom->setColorArray(new osg::Vec4Array(), osg::Array::BIND_PER_VERTEX);
 		geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, 0));
 		_cloudGeode->addDrawable(geom);
+
+		m_pointAttribute = new osg::Point(2.0f);
+		geom->getOrCreateStateSet()->setAttributeAndModes(m_pointAttribute, osg::StateAttribute::ON);
 		applyRenderState(geom);
 	}
 	~LivoxCloudVisualizer() {};
@@ -83,6 +86,9 @@ public:
 	}
 	void updatePointSize(const int size) {
 		m_currentPointSize = static_cast<float>(size);
+		if (m_pointAttribute.valid()) {
+			m_pointAttribute->setSize(m_currentPointSize);
+		}
 		if (_cloudGeode && _cloudGeode->getNumDrawables() > 0) {
 			applyRenderState(dynamic_cast<osg::Geometry*>(_cloudGeode->getDrawable(0)));
 		}
@@ -118,6 +124,8 @@ private:
 	}
 
 	osg::Geode* _cloudGeode;
+	osg::ref_ptr<osg::Point> m_pointAttribute;
+
 	int m_currentPointSize = 2;
 	int m_currentOpacity = 100;
 

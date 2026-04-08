@@ -16,14 +16,14 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 	connect(ui->InterWidget, &InteractionWidget::progressUpdated, this, [this](const int value) {
 		emit progressUpdated(value);
 		});
-	/*
+	
 	connect(ui->InterWidget, &InteractionWidget::pointSizeChanged, this, [this](const int& value) {
 		emit pointSizeChanged(value);
 		});
 	connect(ui->InterWidget, &InteractionWidget::pointOpacityChanged, this, [this](const int& value) {
 		emit pointOpacityChanged(value);
 		});
-
+	/*
 	connect(ui->InterWidget, &InteractionWidget::requestShowNormals, this, [this](const bool& show) {
 		emit requestShowNormals(show);
 		});
