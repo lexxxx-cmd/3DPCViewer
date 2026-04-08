@@ -1,0 +1,23 @@
+target_sources(3DPCViewer PRIVATE
+	ControlPanelWidget.ui
+    ControlPanelWidget.h
+    ControlPanelWidget.cpp
+    DataWidget.ui
+    DataWidget.h
+    DataWidget.cpp
+    ImagePanelWidget.ui
+    ImagePanelWidget.h
+    ImagePanelWidget.cpp
+    InteractionWidget.ui
+    InteractionWidget.h
+    InteractionWidget.cpp
+    PCViewer.ui
+    PCViewer.h
+    PCViewer.cpp
+    StatusWidget.ui
+    StatusWidget.h
+    StatusWidget.cpp
+    VisualAreaWidget.ui
+    VisualAreaWidget.h
+    VisualAreaWidget.cpp
+)

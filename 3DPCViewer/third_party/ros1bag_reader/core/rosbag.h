@@ -63,6 +63,7 @@ public:
     Rosbag(const std::string &rosbag_path);
     void printInfo() const;
     void printAvailableTopics() const;
+    std::vector<std::string> getAvailableTopics() const;
     void saveDataOnTopic(const std::string &topic_name,
                          const std::string &output_path);
 
