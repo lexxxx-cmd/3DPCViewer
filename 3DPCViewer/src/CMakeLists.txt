@@ -12,6 +12,9 @@ target_include_directories(3DPCViewer PUBLIC
 	${OPENSCENEGRAPH_INCLUDE_DIRS}
 )
 
+# TBB is required by MSVC / GCC for std::execution parallel policies.
+find_package(TBB QUIET)
+
 target_link_libraries(3DPCViewer PRIVATE
 	Qt${QT_VERSION_MAJOR}::Widgets
 	Qt${QT_VERSION_MAJOR}::Concurrent
@@ -20,6 +23,10 @@ target_link_libraries(3DPCViewer PRIVATE
 	${OPENSCENEGRAPH_LIBRARIES}
 	rosbag_reader_core
 )
+
+if(TBB_FOUND)
+    target_link_libraries(3DPCViewer PRIVATE TBB::tbb)
+endif()
 
 add_subdirectory(core)
 add_subdirectory(io)
