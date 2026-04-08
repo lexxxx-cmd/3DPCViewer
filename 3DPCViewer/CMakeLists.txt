@@ -18,7 +18,10 @@ find_package(Qt${QT_VERSION_MAJOR}
         Concurrent
         OpenGL
         OpenGLWidgets
+        Sql
 )
+
+find_package(fastcdr REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil)
 

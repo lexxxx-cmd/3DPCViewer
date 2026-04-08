@@ -22,6 +22,7 @@ target_link_libraries(3DPCViewer PRIVATE
 	${PCL_LIBRARIES}
 	${OPENSCENEGRAPH_LIBRARIES}
 	rosbag_reader_core
+	db_module
 )
 
 if(TBB_FOUND)
@@ -33,3 +34,4 @@ add_subdirectory(io)
 add_subdirectory(ui)
 add_subdirectory(node)
 add_subdirectory(osgQOpenGL)
+add_subdirectory(db)

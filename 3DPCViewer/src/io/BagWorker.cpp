@@ -1,5 +1,6 @@
 #include "BagWorker.h"
 #include "core/rosbag.h"
+#include "db/CDRConverter.h"
 #include <QDebug>
 #include <QImage>
 #include <execution>
@@ -12,7 +13,7 @@ void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
 
-void BagWorker::processBag(const QString& bagPath) {
+void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     m_stopFlag = false;
 
     // Open bag once to retrieve the topic list (metadata only, very fast).
@@ -26,6 +27,8 @@ void BagWorker::processBag(const QString& bagPath) {
         if (m_bagCache.find(topic) != m_bagCache.end()) {
             // TODO
             m_bagCache.clear();
+            m_bagTimestamps.clear();
+            m_bagTopicTypes.clear();
             return;
         }
     }
@@ -34,25 +37,39 @@ void BagWorker::processBag(const QString& bagPath) {
     // Each task opens its own Rosbag (and therefore its own file descriptor)
     // to avoid contention on the shared ifstream.
     const std::string pathStr = bagPath.toStdString();
-    using TopicPayloads = std::pair<std::string, std::vector<std::vector<uint8_t>>>;
-    std::vector<std::future<TopicPayloads>> futures;
+
+    struct TopicData {
+        std::string                        topic;
+        std::vector<std::vector<uint8_t>>  payloads;
+        std::vector<int64_t>               timestamps;
+        std::string                        typeName;
+    };
+
+    std::vector<std::future<TopicData>> futures;
     futures.reserve(topicList.size());
 
     for (const std::string& topic : topicList) {
         futures.push_back(std::async(std::launch::async,
-            [pathStr, topic]() -> TopicPayloads {
-                qDebug() << "Bag 涓彲鐢� Topic:" << QString::fromStdString(topic);
+            [pathStr, topic]() -> TopicData {
+                qDebug() << "Bag 中可用 Topic:" << QString::fromStdString(topic);
                 Rosbag topicBag(pathStr);
-                return { topic, topicBag.getRawPayloads(topic) };
+                TopicData td;
+                td.topic      = topic;
+                td.payloads   = topicBag.getRawPayloads(topic);
+                td.timestamps = topicBag.getMessageTimestamps(topic);
+                td.typeName   = topicBag.getTopicType(topic);
+                return td;
             }));
     }
 
     // Collect results and build the cache.
     int max_size = 0;
     for (auto& fut : futures) {
-        auto [topic, payloads] = fut.get();
-        max_size = std::max(max_size, static_cast<int>(payloads.size()));
-        m_bagCache[topic] = std::move(payloads);
+        auto td = fut.get();
+        max_size = std::max(max_size, static_cast<int>(td.payloads.size()));
+        m_bagTimestamps[td.topic] = std::move(td.timestamps);
+        m_bagTopicTypes[td.topic] = std::move(td.typeName);
+        m_bagCache[td.topic]      = std::move(td.payloads);
     }
 
     // Verify that at least one message was read.
@@ -61,6 +78,36 @@ void BagWorker::processBag(const QString& bagPath) {
         return;
     }
     emit messageNumReady(max_size);
+
+    // -----------------------------------------------------------------------
+    // DB pipeline: wrap every payload in a DDS-CDR frame and emit it so
+    // DatabaseWorker can persist the data asynchronously.
+    // -----------------------------------------------------------------------
+    for (const auto& [topic, payloads] : m_bagCache) {
+        if (m_stopFlag) break;
+
+        const auto& timestamps = m_bagTimestamps[topic];
+        const std::string& typeName = m_bagTopicTypes[topic];
+
+        for (size_t i = 0; i < payloads.size(); ++i) {
+            if (m_stopFlag) break;
+
+            const auto& payload = payloads[i];
+            RawBagMessage msg;
+            msg.bagIndex    = bagIndex;
+            msg.topicName   = QString::fromStdString(topic);
+            msg.typeName    = QString::fromStdString(typeName);
+            msg.timestampNs = (i < timestamps.size()) ? timestamps[i] : 0LL;
+
+            CDRConverter::packRawBytesToCDR(
+                reinterpret_cast<const char*>(payload.data()),
+                static_cast<int>(payload.size()),
+                msg.rawData);
+
+            emit parsedMessageReady(msg);
+        }
+    }
+
     emit finished();
 }
 
