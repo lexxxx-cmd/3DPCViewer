@@ -205,22 +205,31 @@ ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
     ImageFrame frame;
     size_t offset = 0;
 
-    // 1. 跨过 Header
-    offset += 12;
+    // 1. 解析 Header
+    uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
+    uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
+    frame.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
+
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     offset += frame_id_len;
 
-    // 2. 跨过 format 字符串
     uint32_t format_len = *(uint32_t*)(payload + offset); offset += 4;
+    QString format_str = QString::fromUtf8((const char*)(payload + offset), format_len);
     offset += format_len;
 
-    // 3. 读取图像数据长度
     uint32_t data_len = *(uint32_t*)(payload + offset); offset += 4;
+
+    // 越界保护
     if (offset + data_len > length) {
-        return frame; // 越界保护
+        qWarning() << "CompressedImage 数据包不完整，发生越界！";
+        return frame;
     }
-    // 4. Qt 原生解压 JPEG/PNG
-    frame.image.loadFromData(payload + offset, data_len);
+
+    bool success = frame.image.loadFromData(payload + offset, data_len);
+    if (!success) {
+        qWarning() << "图像解码失败！ROS format 字段为:" << format_str;
+    }
 
     return frame;
 }

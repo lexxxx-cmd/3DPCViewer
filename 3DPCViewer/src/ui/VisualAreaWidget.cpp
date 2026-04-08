@@ -14,11 +14,6 @@ VisualAreaWidget::VisualAreaWidget(QWidget* parent) : QWidget(parent), ui(new Ui
     ui->gridLayout_2->addWidget(m_osgWidget);
 
     connect(m_osgWidget, &osgQOpenGLWidget::initialized, this, &VisualAreaWidget::initOSG);
-
-    m_imagePanel = new ImagePanel(this);
-    m_imagePanel->move(20, 20);
-    m_imagePanel->raise();
-    //m_imagePanel->setImage(QPixmap("E:\\C++_pj\\repos\\3DPCViewer\\data\\1774599812.5.jpg"));
 }
 
 void VisualAreaWidget::initOSG() {
@@ -85,8 +80,6 @@ void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
 VisualAreaWidget::~VisualAreaWidget() {
     delete ui;
     delete m_osgWidget;
-    delete m_imagePanel;
-    m_imagePanel = nullptr;
     m_osgWidget = nullptr;
 }
 
@@ -96,10 +89,6 @@ void VisualAreaWidget::onCloudFrameReady(const GeneralCloudFrame& frame) {
         _livoxViz->updateCloud(frame.points);
     }
     m_osgWidget->update();
-}
-
-void VisualAreaWidget::onImageFrameReady() {
-    //
 }
 
 void VisualAreaWidget::onOdomFrameReady(const OdomFrame& frame) {

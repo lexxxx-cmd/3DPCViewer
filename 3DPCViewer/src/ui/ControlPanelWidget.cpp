@@ -11,6 +11,7 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 		});
 	connect(this, &ControlPanelWidget::topicListReady, ui->StatusW, &StatusWidget::onUpdateTopicList);
 	connect(this, &ControlPanelWidget::messageNumReady, ui->InterWidget, &InteractionWidget::onMaxmessageNumSet);
+	connect(this, &ControlPanelWidget::onImageFrameReady, ui->InterWidget, &InteractionWidget::onImageFrameReady);
 
 	connect(ui->InterWidget, &InteractionWidget::progressUpdated, this, [this](const int value) {
 		emit progressUpdated(value);

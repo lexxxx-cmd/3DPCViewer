@@ -12,7 +12,7 @@ PCViewer::PCViewer(QWidget *parent)
         });
     connect(this, &PCViewer::requestUpdateFileSize, ui->ControlWidget, &ControlPanelWidget::onFileSizeUpdated);
     connect(this, &PCViewer::cloudFrameReady, ui->ShowWidget, &VisualAreaWidget::onCloudFrameReady);
-    connect(this, &PCViewer::imageFrameReady, ui->ShowWidget, &VisualAreaWidget::onImageFrameReady);
+    connect(this, &PCViewer::imageFrameReady, ui->ControlWidget, &ControlPanelWidget::onImageFrameReady);
     connect(this, &PCViewer::odomFrameReady, ui->ShowWidget, &VisualAreaWidget::onOdomFrameReady);
     
     connect(this, &PCViewer::topicListReady, ui->ControlWidget, &ControlPanelWidget::topicListReady);

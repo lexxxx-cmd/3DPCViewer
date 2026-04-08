@@ -1,21 +1,24 @@
 #pragma once
 
 #include <QWidget>
+#include <QWidget>
 #include <QPropertyAnimation>
 
-namespace Ui { class ImagePanel; }
+QT_BEGIN_NAMESPACE
+namespace Ui { class ImagePanelWidget; };
+QT_END_NAMESPACE
 
-class ImagePanel : public QWidget {
-    Q_OBJECT
+class ImagePanelWidget : public QWidget
+{
+	Q_OBJECT
+
 public:
-    explicit ImagePanel(QWidget* parent = nullptr);
-    void setImage(const QPixmap& pixmap);
-
-private slots:
-    void on_btnToggle_clicked();
+	ImagePanelWidget(QWidget *parent = nullptr);
+	~ImagePanelWidget();
+	void setImage(const QPixmap& pixmap);
 
 private:
-    Ui::ImagePanel* ui;
-    bool m_isExpanded = false;
-    QPropertyAnimation* m_animation;
+	Ui::ImagePanelWidget *ui;
+	bool m_isExpanded = false;
+	QPropertyAnimation* m_animation;
 };

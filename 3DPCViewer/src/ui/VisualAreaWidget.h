@@ -32,7 +32,6 @@ public slots:
     void onChangeOpacityRequested(const int& opacity);
 
     void onCloudFrameReady(const GeneralCloudFrame& frame);
-    void onImageFrameReady();
     void onOdomFrameReady(const OdomFrame& frame);
 
 signals:
@@ -43,7 +42,6 @@ private:
 
     Ui::VisualAreaWidgetClass* ui;
     osgQOpenGLWidget* m_osgWidget;
-    ImagePanel* m_imagePanel;
 
     osg::ref_ptr<osg::Group> m_root;
     osg::ref_ptr<osg::Geode> m_cloudGeode;

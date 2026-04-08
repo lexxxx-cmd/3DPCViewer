@@ -129,3 +129,9 @@ void InteractionWidget::onProgressNumChanged(int value) {
 	ui->lbl_ProgressValue->setText(QString("%1/%2").arg(cur_messageNum).arg(max_messageNum));
 	emit progressUpdated(cur_messageNum);
 }
+
+void InteractionWidget::onImageFrameReady(const ImageFrame& frame) {
+	if (frame.image.isNull()) return;
+	ui->widget_8->setImage(QPixmap::fromImage(frame.image).scaled(
+		ui->widget_8->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
