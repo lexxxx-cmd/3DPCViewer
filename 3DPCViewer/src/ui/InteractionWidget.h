@@ -4,6 +4,7 @@
 #include <memory>
 #include <QTimer>
 #include "ui_InteractionWidget.h"
+#include "io/BagDataTypes.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class InteractionWidgetClass; };
@@ -22,6 +23,7 @@ public slots:
 	void onOpacitySliderChanged(int value);
 	void onMaxmessageNumSet(int value);
 	void onProgressNumChanged(int value);
+	void onImageFrameReady(const ImageFrame& frame);
 
 
 signals:

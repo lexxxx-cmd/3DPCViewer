@@ -42,6 +42,7 @@ private:
 
     // 二进制解析
     GeneralCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
+    GeneralCloudFrame parseSensorPC2Payload(const uint8_t* payload, size_t length);
     ImageFrame parseImagePayload(const uint8_t* payload, size_t length);
     OdomFrame parseOdomPayload(const uint8_t* payload, size_t length);
 };

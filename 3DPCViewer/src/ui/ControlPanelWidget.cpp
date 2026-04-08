@@ -11,18 +11,19 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 		});
 	connect(this, &ControlPanelWidget::topicListReady, ui->StatusW, &StatusWidget::onUpdateTopicList);
 	connect(this, &ControlPanelWidget::messageNumReady, ui->InterWidget, &InteractionWidget::onMaxmessageNumSet);
+	connect(this, &ControlPanelWidget::onImageFrameReady, ui->InterWidget, &InteractionWidget::onImageFrameReady);
 
 	connect(ui->InterWidget, &InteractionWidget::progressUpdated, this, [this](const int value) {
 		emit progressUpdated(value);
 		});
-	/*
+	
 	connect(ui->InterWidget, &InteractionWidget::pointSizeChanged, this, [this](const int& value) {
 		emit pointSizeChanged(value);
 		});
 	connect(ui->InterWidget, &InteractionWidget::pointOpacityChanged, this, [this](const int& value) {
 		emit pointOpacityChanged(value);
 		});
-
+	/*
 	connect(ui->InterWidget, &InteractionWidget::requestShowNormals, this, [this](const bool& show) {
 		emit requestShowNormals(show);
 		});
