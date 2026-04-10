@@ -20,5 +20,8 @@ DataWidget::DataWidget(QWidget *parent)
 		});
 }
 
-DataWidget::~DataWidget() = default;
+void DataWidget::setImportInProgress(bool inProgress) {
+	ui->pB_import_bag->setEnabled(!inProgress);
+}
 
+DataWidget::~DataWidget() = default;

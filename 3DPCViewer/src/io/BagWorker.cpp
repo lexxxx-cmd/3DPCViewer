@@ -9,29 +9,35 @@
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
 
+namespace {
+constexpr int kCdrEncapsulationHeaderSize = 4;
+}
+
 void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
 
+void BagWorker::clearCurrentCache() {
+    m_bagCache.clear();
+    m_bagTimestamps.clear();
+    m_bagTopicTypes.clear();
+}
+
 void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     m_stopFlag = false;
+    m_currentBagIndex = bagIndex;
+    clearCurrentCache();
 
     // Open bag once to retrieve the topic list (metadata only, very fast).
     Rosbag bag(bagPath.toStdString());
     std::vector<std::string> topicList = bag.getAvailableTopics();
 
-    emit topicListReady(topicList);
-
-    // Guard: if the cache already contains data from this bag, clear it first.
+    std::vector<std::string> bagTopicList;
+    bagTopicList.reserve(topicList.size());
     for (const std::string& topic : topicList) {
-        if (m_bagCache.find(topic) != m_bagCache.end()) {
-            // TODO
-            m_bagCache.clear();
-            m_bagTimestamps.clear();
-            m_bagTopicTypes.clear();
-            return;
-        }
+        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + topic);
     }
+    emit topicListReady(bagTopicList);
 
     // Launch one async task per topic so their payload reads run in parallel.
     // Each task opens its own Rosbag (and therefore its own file descriptor)
@@ -108,6 +114,47 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
         }
     }
 
+    emit finished();
+}
+
+void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& messages, int bagIndex) {
+    m_stopFlag = false;
+    m_currentBagIndex = bagIndex;
+    clearCurrentCache();
+
+    std::size_t maxSize = 0;
+    for (const RawBagMessage& msg : messages) {
+        const std::string topic = msg.topicName.toStdString();
+        const QByteArray& cdrData = msg.rawData;
+        // Raw data in DB is CDR-wrapped; skip the 4-byte DDS encapsulation header
+        // so cached payload stays identical to original ROS1 bytes used by parsers.
+        if (cdrData.size() <= kCdrEncapsulationHeaderSize) {
+            continue;
+        }
+
+        const auto* payloadBegin =
+            reinterpret_cast<const uint8_t*>(cdrData.constData() + kCdrEncapsulationHeaderSize);
+        const auto* payloadEnd =
+            reinterpret_cast<const uint8_t*>(cdrData.constData() + cdrData.size());
+        std::vector<uint8_t> payload;
+        payload.reserve(static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize));
+        payload.insert(payload.end(), payloadBegin, payloadEnd);
+
+        auto& payloads = m_bagCache[topic];
+        payloads.emplace_back(std::move(payload));
+        m_bagTimestamps[topic].push_back(msg.timestampNs);
+        m_bagTopicTypes[topic] = msg.typeName.toStdString();
+        maxSize = std::max(maxSize, payloads.size());
+    }
+
+    std::vector<std::string> bagTopicList;
+    bagTopicList.reserve(m_bagCache.size());
+    for (const auto& cacheEntry : m_bagCache) {
+        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + cacheEntry.first);
+    }
+
+    emit topicListReady(bagTopicList);
+    emit messageNumReady(static_cast<int>(maxSize));
     emit finished();
 }
 

@@ -14,6 +14,8 @@ public:
 explicit BagWorker(QObject *parent = nullptr);
 ~BagWorker() = default;
 
+    void rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& messages, int bagIndex);
+
 public slots:
     // bagIndex: 1-based counter supplied by DataService to distinguish imports
     void processBag(const QString& bagPath, int bagIndex);
@@ -37,7 +39,10 @@ signals:
     void finished();
 
 private:
+    void clearCurrentCache();
+
     std::atomic<bool> m_stopFlag;
+    int m_currentBagIndex{0};
     std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache;
     std::unordered_map<std::string, std::vector<int64_t>>              m_bagTimestamps;
     std::unordered_map<std::string, std::string>                       m_bagTopicTypes;
