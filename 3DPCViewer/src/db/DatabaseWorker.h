@@ -28,14 +28,6 @@ public slots:
     // worker thread exits so no data is lost.
     void flushBuffer();
 
-    // Loads all messages belonging to the given bag index from the database
-    // and emits bagCacheReady so BagWorker can restore its in-memory cache.
-    void loadBagFromDB(int bagIndex);
-
-signals:
-    // Emitted when loadBagFromDB has finished building the cache snapshot.
-    void bagCacheReady(const BagCacheData& cache);
-
 private:
     void commitBatch();
     int  getOrRegisterTopicId(const QString& topicName, const QString& typeName);

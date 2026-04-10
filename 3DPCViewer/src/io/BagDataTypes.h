@@ -131,23 +131,3 @@ struct RawBagMessage {
 };
 
 Q_DECLARE_METATYPE(RawBagMessage)
-
-// ---------------------------------------------------------------------------
-// BagCacheData — complete in-memory snapshot of one bag's decoded payloads.
-// Used to transfer the cache from DatabaseWorker to BagWorker across threads.
-// ---------------------------------------------------------------------------
-#include <unordered_map>
-#include <string>
-
-struct BagCacheData {
-    // raw topic name (no /bagN prefix) → ordered list of raw payload bytes
-    std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> payloads;
-    // raw topic name → ordered list of nanosecond timestamps
-    std::unordered_map<std::string, std::vector<int64_t>>              timestamps;
-    // raw topic name → ROS message type string
-    std::unordered_map<std::string, std::string>                       types;
-    // maximum message count across all topics
-    int maxSize{0};
-};
-
-Q_DECLARE_METATYPE(BagCacheData)

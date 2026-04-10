@@ -20,18 +20,16 @@ void Controller::run()
 
 void Controller::setupConnections()
 {
-    // UI request â†’ DataService
+    // UIµ½·þÎñÁ´½Ó
 	connect(m_viewer.get(), &PCViewer::requestProcBag, m_dataService.get(), &DataService::startProcess);
 	connect(m_viewer.get(), &PCViewer::progressUpdated, m_dataService.get(), &DataService::updateProgress);
 
-    // Topic checkbox â†’ DataService
-    connect(m_viewer.get(), &PCViewer::topicSelected,
-            m_dataService.get(), &DataService::onTopicSelected);
-
-	// DataService â†’ UI
+	// ·þÎñµ½UIÁ´½Ó
 	connect(m_dataService.get(), &DataService::cloudFrameReady, m_viewer.get(), &PCViewer::cloudFrameReady);
 	connect(m_dataService.get(), &DataService::imageFrameReady, m_viewer.get(), &PCViewer::imageFrameReady);
 	connect(m_dataService.get(), &DataService::odomFrameReady, m_viewer.get(), &PCViewer::odomFrameReady);
 	connect(m_dataService.get(), &DataService::topicListReady, m_viewer.get(), &PCViewer::topicListReady);
 	connect(m_dataService.get(), &DataService::messageNumReady, m_viewer.get(), &PCViewer::messageNumReady);
+
+    
 }
