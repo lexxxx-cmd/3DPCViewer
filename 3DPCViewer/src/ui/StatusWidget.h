@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <memory>
 #include <QStandardItemModel>
+#include <QSet>
 #include "ui_StatusWidget.h"
 
 QT_BEGIN_NAMESPACE
@@ -25,5 +26,5 @@ public slots:
 private:
 	std::unique_ptr<Ui::StatusWidgetClass> ui;
 	QStandardItemModel* topicModel;
+	QSet<QString> m_knownTopics;
 };
-

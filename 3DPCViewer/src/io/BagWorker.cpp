@@ -139,12 +139,14 @@ void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& mes
 
     std::vector<std::string> bagTopicList;
     bagTopicList.reserve(m_bagCache.size());
-    for (const auto& [topic, _] : m_bagCache) {
+    for (const auto& [topic, payloadList] : m_bagCache) {
+        (void)payloadList;
         bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + topic);
     }
 
     emit topicListReady(bagTopicList);
     emit messageNumReady(static_cast<int>(maxSize));
+    emit finished();
 }
 
 void BagWorker::updateProgress(const int value) {

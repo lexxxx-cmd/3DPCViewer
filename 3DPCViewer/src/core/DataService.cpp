@@ -117,20 +117,30 @@ if (!m_bagWorker || !m_dbWorker || m_importInProgress || bagIndex <= 0) {
 return;
 }
 
-std::vector<RawBagMessage> dbMessages;
-QMetaObject::invokeMethod(m_dbWorker,
-                          [this, bagIndex, &dbMessages]() {
-                              dbMessages = m_dbWorker->loadMessagesByBagIndex(bagIndex);
-                          },
-                          Qt::BlockingQueuedConnection);
-
-QMetaObject::invokeMethod(m_bagWorker,
-                          [this, dbMessages, bagIndex]() {
-                              m_bagWorker->rebuildCacheFromDbMessages(dbMessages, bagIndex);
-                          },
-                          Qt::BlockingQueuedConnection);
-
+setImportInProgress(true);
 m_currentBagIndex = bagIndex;
+
+QMetaObject::invokeMethod(m_dbWorker,
+                          [this, bagIndex]() {
+                              std::vector<RawBagMessage> dbMessages =
+                                  m_dbWorker->loadMessagesByBagIndex(bagIndex);
+
+                              QMetaObject::invokeMethod(this,
+                                                        [this, bagIndex, dbMessages = std::move(dbMessages)]() mutable {
+                                                            if (!m_bagWorker) {
+                                                                setImportInProgress(false);
+                                                                return;
+                                                            }
+                                                            QMetaObject::invokeMethod(
+                                                                m_bagWorker,
+                                                                [this, bagIndex, dbMessages = std::move(dbMessages)]() mutable {
+                                                                    m_bagWorker->rebuildCacheFromDbMessages(dbMessages, bagIndex);
+                                                                },
+                                                                Qt::QueuedConnection);
+                                                        },
+                                                        Qt::QueuedConnection);
+                          },
+                          Qt::QueuedConnection);
 }
 
 void DataService::setImportInProgress(bool inProgress)

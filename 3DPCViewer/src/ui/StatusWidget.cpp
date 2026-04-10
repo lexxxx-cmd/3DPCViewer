@@ -1,5 +1,4 @@
 #include "ui/StatusWidget.h"
-#include <QSet>
 
 StatusWidget::StatusWidget(QWidget *parent)
 	: QWidget(parent), topicModel(nullptr)
@@ -24,18 +23,10 @@ void StatusWidget::onUpdateTopicList(const std::vector<std::string>& topics) {
     // 2. �����źţ���ֹ�����Ӵ�������ʱƵ������ itemChanged �ۺ�����
     topicModel->blockSignals(true);
 
-    QSet<QString> existingTopics;
-    for (int row = 0; row < topicModel->rowCount(); ++row) {
-        QStandardItem* existing = topicModel->item(row);
-        if (existing) {
-            existingTopics.insert(existing->text());
-        }
-    }
-
     // 3. �������
     for (const auto& topic : topics) {
         const QString topicName = QString::fromStdString(topic);
-        if (existingTopics.contains(topicName)) {
+        if (m_knownTopics.contains(topicName)) {
             continue;
         }
 
@@ -47,7 +38,7 @@ void StatusWidget::onUpdateTopicList(const std::vector<std::string>& topics) {
         item->setEditable(false);           // ��ֹ˫���޸�����
 
         topicModel->appendRow(item);
-        existingTopics.insert(topicName);
+        m_knownTopics.insert(topicName);
     }
 
     // 4. �ָ��źŲ�������ͼ
@@ -69,4 +60,3 @@ void StatusWidget::onTopicStateChanged(QStandardItem* item) {
        
     }
 }
-

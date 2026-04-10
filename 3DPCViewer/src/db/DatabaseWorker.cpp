@@ -200,7 +200,10 @@ std::vector<RawBagMessage> DatabaseWorker::loadMessagesByBagIndex(int bagIndex)
         const QString prefixedTopic = q.value(0).toString();
         QString rawTopic = prefixedTopic;
         if (prefixedTopic.startsWith(bagPrefix)) {
-            rawTopic = QStringLiteral("/") + prefixedTopic.mid(bagPrefix.size());
+            const QString topicSuffix = prefixedTopic.mid(bagPrefix.size());
+            rawTopic = topicSuffix.startsWith(QLatin1Char('/'))
+                           ? topicSuffix
+                           : (QStringLiteral("/") + topicSuffix);
         }
 
         RawBagMessage msg;
