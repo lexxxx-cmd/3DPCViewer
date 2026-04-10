@@ -362,5 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /CMakeUserPresets.json
+/build/
 /data/bunny/bunny/data
 /data/bunny/bunny/reconstruction

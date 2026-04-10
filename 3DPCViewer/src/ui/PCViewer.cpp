@@ -26,4 +26,3 @@ PCViewer::PCViewer(QWidget *parent)
 }
 
 PCViewer::~PCViewer() = default;
-

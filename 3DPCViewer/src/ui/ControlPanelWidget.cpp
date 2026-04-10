@@ -47,5 +47,3 @@ void ControlPanelWidget::onFileSizeUpdated(const int& size) {
 void ControlPanelWidget::onPointSizeUpdated(const int& num) {
 	emit requestUpdatePointSize(num);
 }
-
-
