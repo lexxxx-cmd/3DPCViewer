@@ -10,6 +10,10 @@
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
 
+namespace {
+constexpr int kCdrEncapsulationHeaderSize = 4;
+}
+
 void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
@@ -123,12 +127,14 @@ void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& mes
     for (const RawBagMessage& msg : messages) {
         const std::string topic = msg.topicName.toStdString();
         const QByteArray& cdrData = msg.rawData;
-        if (cdrData.size() <= 4) {
+        // Raw data in DB is CDR-wrapped; skip the 4-byte DDS encapsulation header
+        // so cached payload stays identical to original ROS1 bytes used by parsers.
+        if (cdrData.size() <= kCdrEncapsulationHeaderSize) {
             continue;
         }
 
-        std::vector<uint8_t> payload(static_cast<size_t>(cdrData.size() - 4));
-        std::memcpy(payload.data(), cdrData.constData() + 4, payload.size());
+        std::vector<uint8_t> payload(static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize));
+        std::memcpy(payload.data(), cdrData.constData() + kCdrEncapsulationHeaderSize, payload.size());
 
         auto& payloads = m_bagCache[topic];
         payloads.emplace_back(std::move(payload));
@@ -139,9 +145,8 @@ void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& mes
 
     std::vector<std::string> bagTopicList;
     bagTopicList.reserve(m_bagCache.size());
-    for (const auto& [topic, payloadList] : m_bagCache) {
-        (void)payloadList;
-        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + topic);
+    for (const auto& cacheEntry : m_bagCache) {
+        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + cacheEntry.first);
     }
 
     emit topicListReady(bagTopicList);
