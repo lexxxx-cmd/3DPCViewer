@@ -135,7 +135,107 @@ void DatabaseWorker::commitBatch()
     m_messageBuffer.clear();
 }
 
-int DatabaseWorker::getOrRegisterTopicId(const QString& topicName,
+// ---------------------------------------------------------------------------
+// loadBagFromDB  –  read back all messages for one bag and emit bagCacheReady
+// ---------------------------------------------------------------------------
+void DatabaseWorker::loadBagFromDB(int bagIndex)
+{
+    if (!m_initialized) {
+        qWarning() << "DatabaseWorker::loadBagFromDB: not initialized";
+        return;
+    }
+
+    // First, find all topics whose name starts with /bag{N}/.
+    const QString prefix = QStringLiteral("/bag%1/").arg(bagIndex);
+
+    QSqlQuery topicQ(m_db);
+    topicQ.prepare(QStringLiteral(
+        "SELECT id, name, type FROM topics WHERE name LIKE ?"));
+    topicQ.addBindValue(prefix + QLatin1Char('%'));
+    if (!topicQ.exec()) {
+        qWarning() << "DatabaseWorker::loadBagFromDB: topic query failed:"
+                   << topicQ.lastError().text();
+        return;
+    }
+
+    // Build topicId → (rawTopicName, typeName) map.
+    // rawTopicName strips the /bag{N} prefix: "/bag1/livox/lidar" → "/livox/lidar"
+    struct TopicMeta { QString rawName; QString typeName; };
+    QHash<int, TopicMeta> topicMap;
+    QStringList idStrings;
+
+    while (topicQ.next()) {
+        const int     id       = topicQ.value(0).toInt();
+        const QString fullName = topicQ.value(1).toString();
+        const QString typeName = topicQ.value(2).toString();
+        // Strip "/bag{N}" prefix (everything up to the second '/').
+        const int secondSlash = fullName.indexOf(QLatin1Char('/'), 1);
+        const QString rawName = (secondSlash >= 0) ? fullName.mid(secondSlash)
+                                                    : fullName;
+        topicMap[id] = { rawName, typeName };
+        idStrings << QString::number(id);
+    }
+
+    if (topicMap.isEmpty()) {
+        qWarning() << "DatabaseWorker::loadBagFromDB: no topics found for bag"
+                   << bagIndex;
+        return;
+    }
+
+    // Load all messages for the found topics, ordered by timestamp.
+    QSqlQuery msgQ(m_db);
+    msgQ.exec(QStringLiteral(
+        "SELECT topic_id, timestamp, data FROM messages "
+        "WHERE topic_id IN (%1) ORDER BY timestamp ASC")
+        .arg(idStrings.join(QLatin1Char(','))));
+
+    if (msgQ.lastError().isValid()) {
+        qWarning() << "DatabaseWorker::loadBagFromDB: message query failed:"
+                   << msgQ.lastError().text();
+        return;
+    }
+
+    BagCacheData cache;
+
+    while (msgQ.next()) {
+        const int        topicId   = msgQ.value(0).toInt();
+        const qint64     timestamp = msgQ.value(1).toLongLong();
+        const QByteArray rawData   = msgQ.value(2).toByteArray();
+
+        auto it = topicMap.find(topicId);
+        if (it == topicMap.end()) continue;
+
+        const std::string rawName  = it->rawName.toStdString();
+        const std::string typeName = it->typeName.toStdString();
+
+        // Record the type (same for every message of this topic).
+        cache.types[rawName] = typeName;
+
+        // Strip the 4-byte DDS-CDR encapsulation header that was added
+        // by CDRConverter::packRawBytesToCDR when the data was saved.
+        if (rawData.size() <= 4) continue;
+        const auto* payloadPtr = reinterpret_cast<const uint8_t*>(
+            rawData.constData()) + 4;
+        const size_t payloadSize = static_cast<size_t>(rawData.size()) - 4;
+
+        cache.payloads[rawName].push_back(
+            std::vector<uint8_t>(payloadPtr, payloadPtr + payloadSize));
+        cache.timestamps[rawName].push_back(timestamp);
+
+        const int sz = static_cast<int>(cache.payloads[rawName].size());
+        if (sz > cache.maxSize) cache.maxSize = sz;
+    }
+
+    if (cache.maxSize == 0) {
+        qWarning() << "DatabaseWorker::loadBagFromDB: no messages found for bag"
+                   << bagIndex;
+        return;
+    }
+
+    qDebug() << "DatabaseWorker::loadBagFromDB: loaded" << cache.maxSize
+             << "max messages for bag" << bagIndex;
+    emit bagCacheReady(cache);
+}
                                           const QString& typeName)
 {
     // Fast path: local cache

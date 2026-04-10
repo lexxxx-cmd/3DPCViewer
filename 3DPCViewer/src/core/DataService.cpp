@@ -7,6 +7,7 @@ DataService::DataService(QObject *parent)
 // Register custom meta-types so they can be used in queued signal/slot
 // connections across threads.
 qRegisterMetaType<RawBagMessage>("RawBagMessage");
+qRegisterMetaType<BagCacheData>("BagCacheData");
 qRegisterMetaType<GeneralCloudFrame>("GeneralCloudFrame");
 qRegisterMetaType<ImageFrame>("ImageFrame");
 qRegisterMetaType<OdomFrame>("OdomFrame");
@@ -52,6 +53,12 @@ connect(m_bagWorker, &BagWorker::parsedMessageReady,
 // Flush any remaining buffered messages when the bag worker finishes.
 connect(m_bagWorker, &BagWorker::finished,
         m_dbWorker,  &DatabaseWorker::flushBuffer,
+        Qt::QueuedConnection);
+
+// When DatabaseWorker finishes loading a bag from the DB, pass the
+// reconstructed cache to BagWorker so it can resume slider-based playback.
+connect(m_dbWorker, &DatabaseWorker::bagCacheReady,
+        m_bagWorker, &BagWorker::receiveBagCache,
         Qt::QueuedConnection);
 
 m_dbThread->start();
@@ -102,4 +109,86 @@ void DataService::stopProcess()
 if (m_bagWorker) {
 m_bagWorker->stopProcessing();
 }
+}
+
+// ---------------------------------------------------------------------------
+// onTopicSelected
+// ---------------------------------------------------------------------------
+
+namespace {
+// Length of the "/bag" prefix in a prefixed topic name like "/bag1/livox/lidar".
+static constexpr int BAG_PREFIX_LENGTH = 4; // "/bag"
+
+// Returns the raw topic name from a prefixed topic name.
+// e.g. "/bag1/livox/lidar" → "/livox/lidar"
+QString extractRawTopicName(const QString& prefixedTopic)
+{
+    const int secondSlash = prefixedTopic.indexOf(QLatin1Char('/'), 1);
+    return (secondSlash >= 0) ? prefixedTopic.mid(secondSlash) : prefixedTopic;
+}
+} // namespace
+
+void DataService::onTopicSelected(const QString& prefixedTopic, bool checked)
+{
+    // Parse the bag index from the prefix: "/bag1/livox/lidar" → bagIndex = 1
+    // The format is /bag{N}/rest, so the bag prefix is the part before the
+    // second '/'.
+    const int secondSlash = prefixedTopic.indexOf(QLatin1Char('/'), 1);
+    if (secondSlash < 0) return; // malformed topic name
+
+    const QString bagPart  = prefixedTopic.mid(BAG_PREFIX_LENGTH, secondSlash - BAG_PREFIX_LENGTH);
+    const int     bagIndex = bagPart.toInt();
+    if (bagIndex <= 0) return;
+
+    if (checked) {
+        const bool bagChanged = (m_currentBagIndex != 0 &&
+                                 m_currentBagIndex != bagIndex);
+
+        if (bagChanged) {
+            // Switching to a different bag: stop any ongoing import and
+            // clear the active-topic list for the old bag.
+            if (m_bagWorker) {
+                m_bagWorker->stopProcessing();
+            }
+            m_checkedTopics.clear();
+        }
+
+        m_currentBagIndex = bagIndex;
+        m_checkedTopics.insert(prefixedTopic);
+
+        // Rebuild active (raw) topic list for BagWorker.
+        QStringList activeRaw;
+        for (const QString& t : m_checkedTopics) {
+            activeRaw << extractRawTopicName(t);
+        }
+        if (m_bagWorker) {
+            QMetaObject::invokeMethod(m_bagWorker, "setActiveTopics",
+                Qt::QueuedConnection,
+                Q_ARG(QStringList, activeRaw));
+        }
+
+        // Load (or reload) the bag from the database so the slider-based
+        // playback uses the persisted data.
+        if (m_dbWorker) {
+            QMetaObject::invokeMethod(m_dbWorker, "loadBagFromDB",
+                Qt::QueuedConnection,
+                Q_ARG(int, bagIndex));
+        }
+    } else {
+        m_checkedTopics.remove(prefixedTopic);
+
+        QStringList activeRaw;
+        for (const QString& t : m_checkedTopics) {
+            activeRaw << extractRawTopicName(t);
+        }
+        if (m_bagWorker) {
+            QMetaObject::invokeMethod(m_bagWorker, "setActiveTopics",
+                Qt::QueuedConnection,
+                Q_ARG(QStringList, activeRaw));
+        }
+
+        if (m_checkedTopics.isEmpty()) {
+            m_currentBagIndex = 0;
+        }
+    }
 }

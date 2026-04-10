@@ -13,6 +13,49 @@ void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
 
+// ---------------------------------------------------------------------------
+// setActiveTopics — called by DataService when the user checks/unchecks a topic
+// ---------------------------------------------------------------------------
+void BagWorker::setActiveTopics(const QStringList& rawTopics)
+{
+    m_activeTopics.clear();
+    for (const QString& t : rawTopics) {
+        m_activeTopics.insert(t.toStdString());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// receiveBagCache — replaces the in-memory cache with DB-loaded data
+// ---------------------------------------------------------------------------
+void BagWorker::receiveBagCache(const BagCacheData& cache)
+{
+    m_bagCache      = cache.payloads;
+    m_bagTimestamps = cache.timestamps;
+    m_bagTopicTypes = cache.types;
+    emit messageNumReady(cache.maxSize);
+}
+
+// ---------------------------------------------------------------------------
+// emitFrameForPayload — dispatch one raw payload to the correct visualizer
+// ---------------------------------------------------------------------------
+void BagWorker::emitFrameForPayload(const std::string& topic,
+                                     const std::string& typeName,
+                                     const std::vector<uint8_t>& payload,
+                                     int index)
+{
+    if (typeName == "livox_ros_driver/CustomMsg") {
+        emit cloudFrameReady(parseLivoxPayload(payload.data(), payload.size()));
+    } else if (typeName == "sensor_msgs/PointCloud2") {
+        emit cloudFrameReady(parseSensorPC2Payload(payload.data(), payload.size()));
+    } else if (typeName == "sensor_msgs/CompressedImage") {
+        emit imageFrameReady(parseImagePayload(payload.data(), payload.size()));
+    } else if (typeName == "nav_msgs/Odometry") {
+        OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
+        frame.index = index;
+        emit odomFrameReady(frame);
+    }
+}
+
 void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     m_stopFlag = false;
 
@@ -20,22 +63,32 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     Rosbag bag(bagPath.toStdString());
     std::vector<std::string> topicList = bag.getAvailableTopics();
 
-    emit topicListReady(topicList);
+    // Emit topic names with /bag{N} prefix so the UI can identify which
+    // bag each topic belongs to (e.g. "/bag1/livox/lidar").
+    std::vector<std::string> prefixedTopics;
+    prefixedTopics.reserve(topicList.size());
+    const std::string bagPrefix = "/bag" + std::to_string(bagIndex);
+    for (const std::string& t : topicList) {
+        prefixedTopics.push_back(bagPrefix + t);
+    }
+    emit topicListReady(prefixedTopics);
 
     // Guard: if the cache already contains data from this bag, clear it first.
+    bool cacheConflict = false;
     for (const std::string& topic : topicList) {
         if (m_bagCache.find(topic) != m_bagCache.end()) {
-            // TODO
-            m_bagCache.clear();
-            m_bagTimestamps.clear();
-            m_bagTopicTypes.clear();
-            return;
+            cacheConflict = true;
+            break;
         }
+    }
+    if (cacheConflict) {
+        m_bagCache.clear();
+        m_bagTimestamps.clear();
+        m_bagTopicTypes.clear();
+        return;
     }
 
     // Launch one async task per topic so their payload reads run in parallel.
-    // Each task opens its own Rosbag (and therefore its own file descriptor)
-    // to avoid contention on the shared ifstream.
     const std::string pathStr = bagPath.toStdString();
 
     struct TopicData {
@@ -62,17 +115,25 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
             }));
     }
 
-    // Collect results and build the cache.
+    // Collect results: as each future completes, store in the cache and
+    // immediately stream its visualization frames (live preview during import).
     int max_size = 0;
     for (auto& fut : futures) {
+        if (m_stopFlag) break;
         auto td = fut.get();
         max_size = std::max(max_size, static_cast<int>(td.payloads.size()));
-        m_bagTimestamps[td.topic] = std::move(td.timestamps);
-        m_bagTopicTypes[td.topic] = std::move(td.typeName);
-        m_bagCache[td.topic]      = std::move(td.payloads);
+        m_bagTimestamps[td.topic] = td.timestamps;
+        m_bagTopicTypes[td.topic] = td.typeName;
+        m_bagCache[td.topic]      = td.payloads;
+
+        // Stream visualization frames for this topic as soon as its data
+        // arrives so the user can see data while the remaining topics load.
+        for (size_t i = 0; i < td.payloads.size() && !m_stopFlag; ++i) {
+            emitFrameForPayload(td.topic, td.typeName, td.payloads[i],
+                                static_cast<int>(i));
+        }
     }
 
-    // Verify that at least one message was read.
     if (max_size == 0) {
         emit finished();
         return;
@@ -113,28 +174,26 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
 
 void BagWorker::updateProgress(const int value) {
     for (const auto& topicItem : m_bagCache) {
-        if (value < m_bagCache[topicItem.first].size()) {
-            const auto& payload = m_bagCache[topicItem.first][value];
-            if (topicItem.first == "/livox/lidar") {
-                GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/cloud_registered") {
-                GeneralCloudFrame frame = parseSensorPC2Payload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/usb_cam/image_raw/compressed") {
-                ImageFrame frame = parseImagePayload(payload.data(), payload.size());
-                emit imageFrameReady(frame);
-            }
-            else if (topicItem.first == "/aft_mapped_to_init") {
-                OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
-                frame.index = value;
-                emit odomFrameReady(frame);
-            }
+        // Skip topics that the user has not checked for visualization.
+        // If no topics are active yet (m_activeTopics is empty), show all.
+        if (!m_activeTopics.empty() &&
+            m_activeTopics.find(topicItem.first) == m_activeTopics.end()) {
+            continue;
         }
+
+        if (value >= static_cast<int>(m_bagCache[topicItem.first].size())) {
+            continue;
+        }
+
+        const auto& payload  = m_bagCache[topicItem.first][value];
+        const auto  typeIt   = m_bagTopicTypes.find(topicItem.first);
+        const std::string typeName = (typeIt != m_bagTopicTypes.end())
+                                     ? typeIt->second : std::string{};
+
+        emitFrameForPayload(topicItem.first, typeName, payload, value);
     }
 }
+
 
 GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t length) {
     GeneralCloudFrame frame;
