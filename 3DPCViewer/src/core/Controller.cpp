@@ -23,8 +23,6 @@ void Controller::setupConnections()
     // UI����������
 	connect(m_viewer.get(), &PCViewer::requestProcBag, m_dataService.get(), &DataService::startProcess);
 	connect(m_viewer.get(), &PCViewer::progressUpdated, m_dataService.get(), &DataService::updateProgress);
-	connect(m_viewer.get(), &PCViewer::bagNodeActivated, m_dataService.get(), &DataService::onBagNodeActivated);
-	connect(m_viewer.get(), &PCViewer::topicSelectionChanged, m_dataService.get(), &DataService::onTopicSelectionChanged);
 
 	// ����UI����
 	connect(m_dataService.get(), &DataService::cloudFrameReady, m_viewer.get(), &PCViewer::cloudFrameReady);

@@ -42,8 +42,6 @@ signals:
 	void messageNumReady(int num);
 	void progressUpdated(const int value);//֪ͨ�ϲ㣬��ʾ���ȸ���
 	void onImageFrameReady(const ImageFrame& frame);
-	void bagNodeActivated(int bagIndex);
-	void topicSelectionChanged(int bagIndex, std::vector<std::string> checkedRawTopics);
 
 private:
 	std::unique_ptr<Ui::ControlPanelWidgetClass> ui;

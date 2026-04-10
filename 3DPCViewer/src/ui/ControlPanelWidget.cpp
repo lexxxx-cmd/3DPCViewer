@@ -12,13 +12,6 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 	connect(this, &ControlPanelWidget::topicListReady, ui->StatusW, &StatusWidget::onUpdateTopicList);
 	connect(this, &ControlPanelWidget::messageNumReady, ui->InterWidget, &InteractionWidget::onMaxmessageNumSet);
 	connect(this, &ControlPanelWidget::onImageFrameReady, ui->InterWidget, &InteractionWidget::onImageFrameReady);
-	connect(ui->StatusW, &StatusWidget::bagNodeActivated, this, [this](int bagIndex) {
-		emit bagNodeActivated(bagIndex);
-		});
-	connect(ui->StatusW, &StatusWidget::topicSelectionChanged, this,
-		[this](int bagIndex, const std::vector<std::string>& checkedRawTopics) {
-			emit topicSelectionChanged(bagIndex, checkedRawTopics);
-		});
 
 	connect(ui->InterWidget, &InteractionWidget::progressUpdated, this, [this](const int value) {
 		emit progressUpdated(value);
@@ -54,4 +47,3 @@ void ControlPanelWidget::onFileSizeUpdated(const int& size) {
 void ControlPanelWidget::onPointSizeUpdated(const int& num) {
 	emit requestUpdatePointSize(num);
 }
-

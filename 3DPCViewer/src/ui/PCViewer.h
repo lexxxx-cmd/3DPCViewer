@@ -42,8 +42,6 @@ signals:
 	void messageNumReady(int num);
 
 	void progressUpdated(const int value);
-	void bagNodeActivated(int bagIndex);
-	void topicSelectionChanged(int bagIndex, std::vector<std::string> checkedRawTopics);
 
 	// ����
 	void errorOccur(const QString& errorMsg);

@@ -17,13 +17,6 @@ void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
 
-void BagWorker::setActiveTopics(const std::vector<std::string>& rawTopics)
-{
-    std::lock_guard<std::mutex> lock(m_activeTopicsMutex);
-    m_activeTopics.clear();
-    m_activeTopics.insert(rawTopics.begin(), rawTopics.end());
-}
-
 void BagWorker::clearCurrentCache() {
     m_bagCache.clear();
     m_bagTimestamps.clear();
@@ -166,22 +159,9 @@ void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& mes
 }
 
 void BagWorker::updateProgress(const int value) {
-    std::unordered_set<std::string> activeTopics;
-    {
-        std::lock_guard<std::mutex> lock(m_activeTopicsMutex);
-        activeTopics = m_activeTopics;
-    }
-    if (activeTopics.empty()) {
-        return;
-    }
-
     for (const auto& topicItem : m_bagCache) {
-        if (activeTopics.find(topicItem.first) == activeTopics.end()) {
-            continue;
-        }
-        const auto& payloads = topicItem.second;
-        if (value < payloads.size()) {
-            const auto& payload = payloads[value];
+        if (value < m_bagCache[topicItem.first].size()) {
+            const auto& payload = m_bagCache[topicItem.first][value];
             if (topicItem.first == "/livox/lidar") {
                 GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
                 emit cloudFrameReady(frame);

@@ -4,8 +4,6 @@
 #include <QString>
 #include <QThread>
 #include <unordered_map>
-#include <unordered_set>
-#include <mutex>
 #include "BagDataTypes.h"
 
 class BagWorker : public QObject
@@ -23,7 +21,6 @@ public slots:
     void processBag(const QString& bagPath, int bagIndex);
 
     void updateProgress(const int value);
-    void setActiveTopics(const std::vector<std::string>& rawTopics);
     void stopProcessing();
 
 signals:
@@ -45,8 +42,6 @@ private:
     void clearCurrentCache();
 
     std::atomic<bool> m_stopFlag;
-    mutable std::mutex m_activeTopicsMutex;
-    std::unordered_set<std::string> m_activeTopics;
     int m_currentBagIndex{0};
     std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache;
     std::unordered_map<std::string, std::vector<int64_t>>              m_bagTimestamps;
