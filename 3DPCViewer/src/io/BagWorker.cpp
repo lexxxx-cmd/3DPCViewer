@@ -74,13 +74,18 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     emit topicListReady(prefixedTopics);
 
     // Guard: if the cache already contains data from this bag, clear it first.
+    bool cacheConflict = false;
     for (const std::string& topic : topicList) {
         if (m_bagCache.find(topic) != m_bagCache.end()) {
-            m_bagCache.clear();
-            m_bagTimestamps.clear();
-            m_bagTopicTypes.clear();
-            return;
+            cacheConflict = true;
+            break;
         }
+    }
+    if (cacheConflict) {
+        m_bagCache.clear();
+        m_bagTimestamps.clear();
+        m_bagTopicTypes.clear();
+        return;
     }
 
     // Launch one async task per topic so their payload reads run in parallel.

@@ -114,6 +114,20 @@ m_bagWorker->stopProcessing();
 // ---------------------------------------------------------------------------
 // onTopicSelected
 // ---------------------------------------------------------------------------
+
+namespace {
+// Length of the "/bag" prefix in a prefixed topic name like "/bag1/livox/lidar".
+static constexpr int BAG_PREFIX_LENGTH = 4; // "/bag"
+
+// Returns the raw topic name from a prefixed topic name.
+// e.g. "/bag1/livox/lidar" → "/livox/lidar"
+QString extractRawTopicName(const QString& prefixedTopic)
+{
+    const int secondSlash = prefixedTopic.indexOf(QLatin1Char('/'), 1);
+    return (secondSlash >= 0) ? prefixedTopic.mid(secondSlash) : prefixedTopic;
+}
+} // namespace
+
 void DataService::onTopicSelected(const QString& prefixedTopic, bool checked)
 {
     // Parse the bag index from the prefix: "/bag1/livox/lidar" → bagIndex = 1
@@ -122,7 +136,7 @@ void DataService::onTopicSelected(const QString& prefixedTopic, bool checked)
     const int secondSlash = prefixedTopic.indexOf(QLatin1Char('/'), 1);
     if (secondSlash < 0) return; // malformed topic name
 
-    const QString bagPart  = prefixedTopic.mid(4, secondSlash - 4); // "1"
+    const QString bagPart  = prefixedTopic.mid(BAG_PREFIX_LENGTH, secondSlash - BAG_PREFIX_LENGTH);
     const int     bagIndex = bagPart.toInt();
     if (bagIndex <= 0) return;
 
@@ -145,8 +159,7 @@ void DataService::onTopicSelected(const QString& prefixedTopic, bool checked)
         // Rebuild active (raw) topic list for BagWorker.
         QStringList activeRaw;
         for (const QString& t : m_checkedTopics) {
-            const int s = t.indexOf(QLatin1Char('/'), 1);
-            if (s >= 0) activeRaw << t.mid(s);
+            activeRaw << extractRawTopicName(t);
         }
         if (m_bagWorker) {
             QMetaObject::invokeMethod(m_bagWorker, "setActiveTopics",
@@ -166,8 +179,7 @@ void DataService::onTopicSelected(const QString& prefixedTopic, bool checked)
 
         QStringList activeRaw;
         for (const QString& t : m_checkedTopics) {
-            const int s = t.indexOf(QLatin1Char('/'), 1);
-            if (s >= 0) activeRaw << t.mid(s);
+            activeRaw << extractRawTopicName(t);
         }
         if (m_bagWorker) {
             QMetaObject::invokeMethod(m_bagWorker, "setActiveTopics",
