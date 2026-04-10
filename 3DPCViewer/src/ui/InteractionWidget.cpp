@@ -42,12 +42,12 @@ InteractionWidget::InteractionWidget(QWidget *parent)
 			ui->HSlider_progress->setValue(cur_messageNum + 1);
 		}
 		else {
-			// ²¥·Åµ½×îºó×Ô¶¯Í£Ö¹
+			// ï¿½ï¿½ï¿½Åµï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½Í£Ö¹
 			m_timer->stop();
 			isPlay = false;
 			ui->pB_play_pause->setText("Play");
 			ui->pB_backward->setEnabled(true);
-			// pB_forward ±£³Ö½ûÓÃ£¬ÒòÎªÒÑ¾­µ½µ×ÁË
+			// pB_forward ï¿½ï¿½ï¿½Ö½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½Îªï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		}
 	});
 
@@ -88,7 +88,7 @@ InteractionWidget::InteractionWidget(QWidget *parent)
 		}
 	});
 	connect(ui->pB_set_bgColor, &QPushButton::clicked, this, [this]() {
-		QColor color = QColorDialog::getColor(Qt::black, this, "ÑÕÉ«´°¿Ú±êÌâ");
+		QColor color = QColorDialog::getColor(Qt::black, this, "ï¿½ï¿½É«ï¿½ï¿½ï¿½Ú±ï¿½ï¿½ï¿½");
 		emit bgColorChanged(color);
 		});
 
@@ -105,23 +105,31 @@ void InteractionWidget::onSizeSliderChanged(int value)
 	emit pointSizeChanged(value);
 }
 
-// Í¸Ã÷¶È»¬¿é
+// Í¸ï¿½ï¿½ï¿½È»ï¿½ï¿½ï¿½
 void InteractionWidget::onOpacitySliderChanged(int value)
 {
-	// Í¸Ã÷¶È×ª°Ù·Ö±ÈÏÔÊ¾
+	// Í¸ï¿½ï¿½ï¿½ï¿½×ªï¿½Ù·Ö±ï¿½ï¿½ï¿½Ê¾
 	ui->lbl_Popacity->setText(QString("%1%").arg(value));
 	emit pointOpacityChanged(value);
 }
 
 void InteractionWidget::onMaxmessageNumSet(int value) {
+	// Stop any ongoing playback before switching to a new dataset.
+	if (m_timer->isActive()) {
+		m_timer->stop();
+		isPlay = false;
+		ui->pB_play_pause->setText("Play");
+	}
+
 	max_messageNum = value;
 	if (max_messageNum > 0) {
 		ui->pB_play_pause->setEnabled(true);
 		ui->pB_forward->setEnabled(true);
 	}
+	// Reset the progress slider to the beginning.
 	ui->HSlider_progress->setMaximum(max_messageNum);
-	ui->lbl_ProgressValue->setText(QString("%1/%2").arg(ui->HSlider_progress->value()).arg(max_messageNum));
-
+	ui->HSlider_progress->setValue(0);
+	ui->lbl_ProgressValue->setText(QString("%1/%2").arg(0).arg(max_messageNum));
 }
 
 void InteractionWidget::onProgressNumChanged(int value) {

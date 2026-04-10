@@ -43,6 +43,9 @@ signals:
 	void progressUpdated(const int value);//通知上层，显示进度更新
 	void onImageFrameReady(const ImageFrame& frame);
 
+	// Relayed from StatusWidget: user checked/unchecked a topic.
+	void topicSelected(const QString& topicName, bool checked);
+
 private:
 	std::unique_ptr<Ui::ControlPanelWidgetClass> ui;
 };

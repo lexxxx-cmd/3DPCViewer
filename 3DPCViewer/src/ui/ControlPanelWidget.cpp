@@ -10,6 +10,8 @@ ControlPanelWidget::ControlPanelWidget(QWidget *parent)
 		emit requestProcBag(path);
 		});
 	connect(this, &ControlPanelWidget::topicListReady, ui->StatusW, &StatusWidget::onUpdateTopicList);
+	connect(ui->StatusW, &StatusWidget::topicSelected,
+	        this, &ControlPanelWidget::topicSelected);
 	connect(this, &ControlPanelWidget::messageNumReady, ui->InterWidget, &InteractionWidget::onMaxmessageNumSet);
 	connect(this, &ControlPanelWidget::onImageFrameReady, ui->InterWidget, &InteractionWidget::onImageFrameReady);
 

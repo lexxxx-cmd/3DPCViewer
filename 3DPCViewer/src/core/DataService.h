@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QSet>
 #include <QThread>
 #include "io/BagWorker.h"
 
@@ -22,6 +23,10 @@ void startProcess(const QString& path);
 void updateProgress(const int value);
 void stopProcess();
 
+// Called when the user checks or unchecks a topic in the status tree.
+// prefixedTopic: full name with bag prefix, e.g. "/bag1/livox/lidar".
+void onTopicSelected(const QString& prefixedTopic, bool checked);
+
 signals:
 void cloudFrameReady(const GeneralCloudFrame& frame);
 void imageFrameReady(const ImageFrame& frame);
@@ -39,5 +44,7 @@ QThread*        m_workerThread{nullptr};
 DatabaseWorker* m_dbWorker{nullptr};
 QThread*        m_dbThread{nullptr};
 
-int m_nextBagIndex{1};
+int      m_nextBagIndex{1};
+int      m_currentBagIndex{0};   // bag currently loaded in the cache (0 = none)
+QSet<QString> m_checkedTopics;   // prefixed topic names that are checked
 };
