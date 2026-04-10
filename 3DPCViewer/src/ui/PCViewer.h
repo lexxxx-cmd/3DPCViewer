@@ -24,7 +24,7 @@ public:
 public slots:
 
 signals:
-	// controlÃæ°å
+	// controlï¿½ï¿½ï¿½
 	void requestLoadFile(const QString& path);
 	void requestProcBag(const QString& path);
 	void requestUpdateFileSize(const int& size);
@@ -34,7 +34,7 @@ signals:
 	void pointSizeChanged(const int& value);
 	void pointOpacityChanged(const int& value);
 
-	// ×ª·¢serviceÃæ°åÊý¾Ý
+	// ×ªï¿½ï¿½serviceï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	void cloudFrameReady(const GeneralCloudFrame& frame);
 	void imageFrameReady(const ImageFrame& frame);
 	void odomFrameReady(const OdomFrame& frame);
@@ -42,12 +42,13 @@ signals:
 	void messageNumReady(int num);
 
 	void progressUpdated(const int value);
+	void bagNodeActivated(int bagIndex);
+	void topicSelectionChanged(int bagIndex, std::vector<std::string> checkedRawTopics);
 
-	// ´íÎó
+	// ï¿½ï¿½ï¿½ï¿½
 	void errorOccur(const QString& errorMsg);
 
 private:
     std::unique_ptr<Ui::PCViewerClass> ui;
 
 };
-

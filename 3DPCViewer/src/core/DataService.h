@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QThread>
+#include <set>
 #include "io/BagWorker.h"
 
 class DatabaseWorker;
@@ -22,6 +23,8 @@ void startProcess(const QString& path);
 void updateProgress(const int value);
 void stopProcess();
 void loadBagFromDatabase(int bagIndex);
+void onBagNodeActivated(int bagIndex);
+void onTopicSelectionChanged(int bagIndex, const std::vector<std::string>& checkedRawTopics);
 
 signals:
 void cloudFrameReady(const GeneralCloudFrame& frame);
@@ -47,5 +50,7 @@ QThread*        m_dbThread{nullptr};
 
 int m_nextBagIndex{1};
 int m_currentBagIndex{0};
+int m_loadedBagIndex{0};
 bool m_importInProgress{false};
+std::set<std::string> m_activeCheckedTopics;
 };

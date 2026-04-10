@@ -1,5 +1,6 @@
 #include "DataService.h"
 #include "db/DatabaseWorker.h"
+#include <set>
 
 DataService::DataService(QObject *parent)
 : QObject(parent)
@@ -10,6 +11,7 @@ qRegisterMetaType<RawBagMessage>("RawBagMessage");
 qRegisterMetaType<GeneralCloudFrame>("GeneralCloudFrame");
 qRegisterMetaType<ImageFrame>("ImageFrame");
 qRegisterMetaType<OdomFrame>("OdomFrame");
+qRegisterMetaType<std::vector<std::string>>("std::vector<std::string>");
 
 // ------------------------------------------------------------------
 // Bag-reading worker thread
@@ -88,7 +90,18 @@ return;
 
 const int bagIndex = m_nextBagIndex++;
 m_currentBagIndex = bagIndex;
+m_loadedBagIndex = bagIndex;
+m_activeCheckedTopics.clear();
 setImportInProgress(true);
+
+QMetaObject::invokeMethod(m_bagWorker,
+                          [this]() {
+                              if (!m_bagWorker) {
+                                  return;
+                              }
+                              m_bagWorker->setActiveTopics({});
+                          },
+                          Qt::QueuedConnection);
 
 QMetaObject::invokeMethod(m_bagWorker, "processBag",
 Qt::QueuedConnection,
@@ -113,12 +126,13 @@ m_bagWorker->stopProcessing();
 
 void DataService::loadBagFromDatabase(int bagIndex)
 {
-if (!m_bagWorker || !m_dbWorker || m_importInProgress || bagIndex <= 0) {
+if (!m_bagWorker || !m_dbWorker || m_importInProgress || bagIndex <= 0 || bagIndex == m_loadedBagIndex) {
 return;
 }
 
 setImportInProgress(true);
 m_currentBagIndex = bagIndex;
+m_loadedBagIndex = bagIndex;
 
 QMetaObject::invokeMethod(m_dbWorker,
                           [this, bagIndex]() {
@@ -150,6 +164,52 @@ return;
 }
 m_importInProgress = inProgress;
 emit importStateChanged(m_importInProgress);
+}
+
+void DataService::onBagNodeActivated(int bagIndex)
+{
+if (!m_bagWorker || bagIndex <= 0 || m_importInProgress) {
+return;
+}
+
+if (bagIndex == m_currentBagIndex) {
+return;
+}
+
+m_currentBagIndex = bagIndex;
+m_activeCheckedTopics.clear();
+QMetaObject::invokeMethod(m_bagWorker,
+                          [this]() {
+                              if (!m_bagWorker) {
+                                  return;
+                              }
+                              m_bagWorker->setActiveTopics({});
+                          },
+                          Qt::QueuedConnection);
+
+loadBagFromDatabase(bagIndex);
+}
+
+void DataService::onTopicSelectionChanged(int bagIndex, const std::vector<std::string>& checkedRawTopics)
+{
+if (!m_bagWorker || bagIndex <= 0 || bagIndex != m_currentBagIndex || bagIndex != m_loadedBagIndex) {
+return;
+}
+
+const std::set<std::string> nextCheckedTopics(checkedRawTopics.begin(), checkedRawTopics.end());
+if (nextCheckedTopics == m_activeCheckedTopics) {
+return;
+}
+
+m_activeCheckedTopics = nextCheckedTopics;
+QMetaObject::invokeMethod(m_bagWorker,
+                          [this, checkedRawTopics]() {
+                              if (!m_bagWorker) {
+                                  return;
+                              }
+                              m_bagWorker->setActiveTopics(checkedRawTopics);
+                          },
+                          Qt::QueuedConnection);
 }
 
 void DataService::onBagWorkerFinished()
