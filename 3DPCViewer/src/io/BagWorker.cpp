@@ -179,8 +179,9 @@ void BagWorker::updateProgress(const int value) {
         if (activeTopics.find(topicItem.first) == activeTopics.end()) {
             continue;
         }
-        if (value < topicItem.second.size()) {
-            const auto& payload = topicItem.second[value];
+        const auto& payloads = topicItem.second;
+        if (value < payloads.size()) {
+            const auto& payload = payloads[value];
             if (topicItem.first == "/livox/lidar") {
                 GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
                 emit cloudFrameReady(frame);

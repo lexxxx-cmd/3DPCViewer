@@ -192,7 +192,7 @@ loadBagFromDatabase(bagIndex);
 
 void DataService::onTopicSelectionChanged(int bagIndex, const std::vector<std::string>& checkedRawTopics)
 {
-if (!m_bagWorker || bagIndex <= 0 || bagIndex != m_currentBagIndex || bagIndex != m_loadedBagIndex) {
+if (!m_bagWorker || bagIndex <= 0 || m_currentBagIndex != m_loadedBagIndex || bagIndex != m_currentBagIndex) {
 return;
 }
 
