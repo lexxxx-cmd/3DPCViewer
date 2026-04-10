@@ -18,7 +18,6 @@ PCViewer::PCViewer(QWidget *parent)
     connect(this, &PCViewer::topicListReady, ui->ControlWidget, &ControlPanelWidget::topicListReady);
     connect(this, &PCViewer::messageNumReady, ui->ControlWidget, &ControlPanelWidget::messageNumReady);
     connect(ui->ControlWidget, &ControlPanelWidget::progressUpdated, this, &PCViewer::progressUpdated);
-    connect(ui->ControlWidget, &ControlPanelWidget::topicSelected,   this, &PCViewer::topicSelected);
 
     connect(ui->ControlWidget, &ControlPanelWidget::pointSizeChanged, ui->ShowWidget, &VisualAreaWidget::onChangeSizeRequested);
     connect(ui->ControlWidget, &ControlPanelWidget::pointOpacityChanged, ui->ShowWidget, &VisualAreaWidget::onChangeOpacityRequested);

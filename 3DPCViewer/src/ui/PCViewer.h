@@ -43,9 +43,6 @@ signals:
 
 	void progressUpdated(const int value);
 
-	// Relayed from ControlPanelWidget: user checked/unchecked a topic.
-	void topicSelected(const QString& topicName, bool checked);
-
 	// ´íÎó
 	void errorOccur(const QString& errorMsg);
 

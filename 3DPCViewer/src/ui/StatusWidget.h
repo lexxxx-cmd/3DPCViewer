@@ -22,11 +22,6 @@ public slots:
 	void onUpdateTopicList(const std::vector<std::string>& topics);
 	void onTopicStateChanged(QStandardItem* item);
 
-signals:
-	// Emitted when the user checks or unchecks a topic checkbox.
-	// topicName is the full prefixed name, e.g. "/bag1/livox/lidar".
-	void topicSelected(const QString& topicName, bool checked);
-
 private:
 	std::unique_ptr<Ui::StatusWidgetClass> ui;
 	QStandardItemModel* topicModel;
