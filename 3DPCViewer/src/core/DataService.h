@@ -21,6 +21,7 @@ public slots:
 void startProcess(const QString& path);
 void updateProgress(const int value);
 void stopProcess();
+void loadBagFromDatabase(int bagIndex);
 
 signals:
 void cloudFrameReady(const GeneralCloudFrame& frame);
@@ -31,8 +32,13 @@ void topicListReady(const std::vector<std::string>& topics);
 void messageNumReady(int num);
 void errorOccur(const QString& errorMsg);
 void finished();
+void importStateChanged(bool inProgress);
 
 private:
+void setImportInProgress(bool inProgress);
+void onBagWorkerFinished();
+void onBagWorkerError(const QString& errorMsg);
+
 BagWorker*      m_bagWorker{nullptr};
 QThread*        m_workerThread{nullptr};
 
@@ -40,4 +46,6 @@ DatabaseWorker* m_dbWorker{nullptr};
 QThread*        m_dbThread{nullptr};
 
 int m_nextBagIndex{1};
+int m_currentBagIndex{0};
+bool m_importInProgress{false};
 };

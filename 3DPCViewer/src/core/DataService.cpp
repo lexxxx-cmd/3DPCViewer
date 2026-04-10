@@ -27,7 +27,8 @@ connect(m_bagWorker, &BagWorker::odomFrameReady,   this, &DataService::odomFrame
 connect(m_bagWorker, &BagWorker::progressUpdated,  this, &DataService::progressUpdated);
 connect(m_bagWorker, &BagWorker::topicListReady,   this, &DataService::topicListReady);
 connect(m_bagWorker, &BagWorker::messageNumReady,  this, &DataService::messageNumReady);
-connect(m_bagWorker, &BagWorker::finished,         this, &DataService::finished);
+connect(m_bagWorker, &BagWorker::finished,         this, &DataService::onBagWorkerFinished);
+connect(m_bagWorker, &BagWorker::errorOccur,       this, &DataService::onBagWorkerError);
 
 if (!m_workerThread->isRunning()) {
 m_workerThread->start();
@@ -81,12 +82,18 @@ m_dbThread->wait();
 
 void DataService::startProcess(const QString& path)
 {
-if (m_bagWorker) {
+if (!m_bagWorker || m_importInProgress) {
+return;
+}
+
+const int bagIndex = m_nextBagIndex++;
+m_currentBagIndex = bagIndex;
+setImportInProgress(true);
+
 QMetaObject::invokeMethod(m_bagWorker, "processBag",
 Qt::QueuedConnection,
 Q_ARG(QString, path),
-Q_ARG(int, m_nextBagIndex++));
-}
+Q_ARG(int, bagIndex));
 }
 
 void DataService::updateProgress(const int value) {
@@ -102,4 +109,47 @@ void DataService::stopProcess()
 if (m_bagWorker) {
 m_bagWorker->stopProcessing();
 }
+}
+
+void DataService::loadBagFromDatabase(int bagIndex)
+{
+if (!m_bagWorker || !m_dbWorker || m_importInProgress || bagIndex <= 0) {
+return;
+}
+
+std::vector<RawBagMessage> dbMessages;
+QMetaObject::invokeMethod(m_dbWorker,
+                          [this, bagIndex, &dbMessages]() {
+                              dbMessages = m_dbWorker->loadMessagesByBagIndex(bagIndex);
+                          },
+                          Qt::BlockingQueuedConnection);
+
+QMetaObject::invokeMethod(m_bagWorker,
+                          [this, dbMessages, bagIndex]() {
+                              m_bagWorker->rebuildCacheFromDbMessages(dbMessages, bagIndex);
+                          },
+                          Qt::BlockingQueuedConnection);
+
+m_currentBagIndex = bagIndex;
+}
+
+void DataService::setImportInProgress(bool inProgress)
+{
+if (m_importInProgress == inProgress) {
+return;
+}
+m_importInProgress = inProgress;
+emit importStateChanged(m_importInProgress);
+}
+
+void DataService::onBagWorkerFinished()
+{
+setImportInProgress(false);
+emit finished();
+}
+
+void DataService::onBagWorkerError(const QString& errorMsg)
+{
+setImportInProgress(false);
+emit errorOccur(errorMsg);
 }

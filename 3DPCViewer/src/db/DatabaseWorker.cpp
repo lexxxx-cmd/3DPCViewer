@@ -171,3 +171,46 @@ int DatabaseWorker::getOrRegisterTopicId(const QString& topicName,
     m_topicIdCache[topicName] = id;
     return id;
 }
+
+std::vector<RawBagMessage> DatabaseWorker::loadMessagesByBagIndex(int bagIndex)
+{
+    std::vector<RawBagMessage> result;
+    if (!m_initialized) {
+        qWarning() << "DatabaseWorker: not initialized, cannot load bag index" << bagIndex;
+        return result;
+    }
+
+    const QString bagPrefix = QStringLiteral("/bag%1/").arg(bagIndex);
+
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT t.name, t.type, m.timestamp, m.data "
+        "FROM messages m "
+        "JOIN topics t ON t.id = m.topic_id "
+        "WHERE t.name LIKE ? "
+        "ORDER BY t.name ASC, m.timestamp ASC, m.id ASC"));
+    q.addBindValue(bagPrefix + QStringLiteral("%"));
+
+    if (!q.exec()) {
+        qWarning() << "DatabaseWorker: query bag messages failed:" << q.lastError().text();
+        return result;
+    }
+
+    while (q.next()) {
+        const QString prefixedTopic = q.value(0).toString();
+        QString rawTopic = prefixedTopic;
+        if (prefixedTopic.startsWith(bagPrefix)) {
+            rawTopic = QStringLiteral("/") + prefixedTopic.mid(bagPrefix.size());
+        }
+
+        RawBagMessage msg;
+        msg.bagIndex = bagIndex;
+        msg.topicName = rawTopic;
+        msg.typeName = q.value(1).toString();
+        msg.timestampNs = q.value(2).toLongLong();
+        msg.rawData = q.value(3).toByteArray();
+        result.push_back(std::move(msg));
+    }
+
+    return result;
+}

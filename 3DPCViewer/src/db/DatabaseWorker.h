@@ -5,6 +5,7 @@
 #include <QSqlQuery>
 #include <QHash>
 #include <QList>
+#include <vector>
 
 #include "io/BagDataTypes.h"
 
@@ -15,6 +16,9 @@ class DatabaseWorker : public QObject
 public:
     explicit DatabaseWorker(QObject* parent = nullptr);
     ~DatabaseWorker() override;
+
+    // Must be called from the DB worker thread.
+    std::vector<RawBagMessage> loadMessagesByBagIndex(int bagIndex);
 
 public slots:
     // Must be called from the worker's own thread (connect to QThread::started

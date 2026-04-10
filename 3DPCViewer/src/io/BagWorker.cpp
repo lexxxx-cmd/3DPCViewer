@@ -6,6 +6,7 @@
 #include <execution>
 #include <future>
 #include <numeric>
+#include <cstring>
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
 
@@ -13,25 +14,27 @@ void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
 
+void BagWorker::clearCurrentCache() {
+    m_bagCache.clear();
+    m_bagTimestamps.clear();
+    m_bagTopicTypes.clear();
+}
+
 void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     m_stopFlag = false;
+    m_currentBagIndex = bagIndex;
+    clearCurrentCache();
 
     // Open bag once to retrieve the topic list (metadata only, very fast).
     Rosbag bag(bagPath.toStdString());
     std::vector<std::string> topicList = bag.getAvailableTopics();
 
-    emit topicListReady(topicList);
-
-    // Guard: if the cache already contains data from this bag, clear it first.
+    std::vector<std::string> bagTopicList;
+    bagTopicList.reserve(topicList.size());
     for (const std::string& topic : topicList) {
-        if (m_bagCache.find(topic) != m_bagCache.end()) {
-            // TODO
-            m_bagCache.clear();
-            m_bagTimestamps.clear();
-            m_bagTopicTypes.clear();
-            return;
-        }
+        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + topic);
     }
+    emit topicListReady(bagTopicList);
 
     // Launch one async task per topic so their payload reads run in parallel.
     // Each task opens its own Rosbag (and therefore its own file descriptor)
@@ -109,6 +112,39 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     }
 
     emit finished();
+}
+
+void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& messages, int bagIndex) {
+    m_stopFlag = false;
+    m_currentBagIndex = bagIndex;
+    clearCurrentCache();
+
+    std::size_t maxSize = 0;
+    for (const RawBagMessage& msg : messages) {
+        const std::string topic = msg.topicName.toStdString();
+        const QByteArray& cdrData = msg.rawData;
+        if (cdrData.size() <= 4) {
+            continue;
+        }
+
+        std::vector<uint8_t> payload(static_cast<size_t>(cdrData.size() - 4));
+        std::memcpy(payload.data(), cdrData.constData() + 4, payload.size());
+
+        auto& payloads = m_bagCache[topic];
+        payloads.emplace_back(std::move(payload));
+        m_bagTimestamps[topic].push_back(msg.timestampNs);
+        m_bagTopicTypes[topic] = msg.typeName.toStdString();
+        maxSize = std::max(maxSize, payloads.size());
+    }
+
+    std::vector<std::string> bagTopicList;
+    bagTopicList.reserve(m_bagCache.size());
+    for (const auto& [topic, _] : m_bagCache) {
+        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + topic);
+    }
+
+    emit topicListReady(bagTopicList);
+    emit messageNumReady(static_cast<int>(maxSize));
 }
 
 void BagWorker::updateProgress(const int value) {
