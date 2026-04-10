@@ -10,20 +10,15 @@ StatusWidget::StatusWidget(QWidget *parent)
 StatusWidget::~StatusWidget() = default;
 
 void StatusWidget::onUpdateTopicList(const std::vector<std::string>& topics) {
-    // 1. ��ʼ�������ģ��
     if (!topicModel) {
         topicModel = new QStandardItemModel(this);
         topicModel->setHorizontalHeaderLabels({ "Topic Name" });
 
-        // ���źţ��� Item �Ĺ�ѡ״̬�仯ʱ����
+        
         connect(topicModel, &QStandardItemModel::itemChanged,
             this, &StatusWidget::onTopicStateChanged);
     }
 
-    // 2. �����źţ���ֹ�����Ӵ�������ʱƵ������ itemChanged �ۺ�����
-    topicModel->blockSignals(true);
-
-    // 3. �������
     for (const auto& topic : topics) {
         const QString topicName = QString::fromStdString(topic);
         if (m_knownTopics.contains(topicName)) {
@@ -32,17 +27,14 @@ void StatusWidget::onUpdateTopicList(const std::vector<std::string>& topics) {
 
         QStandardItem* item = new QStandardItem(topicName);
 
-        // ���Ĳ�������Ϊ��ѡ�������ʼ״̬
         item->setCheckable(true);
-        item->setCheckState(Qt::Unchecked); // Ĭ�ϲ���ѡ
-        item->setEditable(false);           // ��ֹ˫���޸�����
+        item->setCheckState(Qt::Unchecked);
+        item->setEditable(false);
 
         topicModel->appendRow(item);
         m_knownTopics.insert(topicName);
     }
 
-    // 4. �ָ��źŲ�������ͼ
-    topicModel->blockSignals(false);
     ui->treeView->setModel(topicModel);
 }
 
@@ -53,7 +45,6 @@ void StatusWidget::onTopicStateChanged(QStandardItem* item) {
     bool isChecked = (item->checkState() == Qt::Checked);
 
     if (isChecked) {
-        // ִ�С��������ⶩ�ġ��򡰱�Ǽ�¼���߼�
        
     }
     else {
