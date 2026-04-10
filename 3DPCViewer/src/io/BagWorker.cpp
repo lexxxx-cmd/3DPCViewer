@@ -6,7 +6,6 @@
 #include <execution>
 #include <future>
 #include <numeric>
-#include <cstring>
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
 
@@ -133,8 +132,13 @@ void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& mes
             continue;
         }
 
-        std::vector<uint8_t> payload(static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize));
-        std::memcpy(payload.data(), cdrData.constData() + kCdrEncapsulationHeaderSize, payload.size());
+        const auto* payloadBegin =
+            reinterpret_cast<const uint8_t*>(cdrData.constData() + kCdrEncapsulationHeaderSize);
+        const auto* payloadEnd =
+            reinterpret_cast<const uint8_t*>(cdrData.constData() + cdrData.size());
+        std::vector<uint8_t> payload;
+        payload.reserve(static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize));
+        payload.insert(payload.end(), payloadBegin, payloadEnd);
 
         auto& payloads = m_bagCache[topic];
         payloads.emplace_back(std::move(payload));
