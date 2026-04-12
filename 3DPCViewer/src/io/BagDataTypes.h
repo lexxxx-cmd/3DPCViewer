@@ -10,12 +10,10 @@
 #include <cstdint>
 #include <algorithm>
 
-// 1. ���� RGB �ṹ��
 struct ColorRGB {
     uint8_t r, g, b;
 };
 
-// 2. ���������� 256 �� Jet ��ɫ��
 constexpr std::array<ColorRGB, 256> generateJetLUT() {
     std::array<ColorRGB, 256> lut{};
     for (int i = 0; i < 256; ++i) {
@@ -42,9 +40,8 @@ constexpr std::array<ColorRGB, 256> generateJetLUT() {
     return lut;
 }
 
-// 3. ����ȫ��/��̬�Ĳ��ұ� (������ɺ������Ѿ���һ��д�����ڴ����������)
 constexpr auto JET_LUT = generateJetLUT();
-// Livox ������ṹ��1�ֽڶ����ֹ��ȡԽ�磩
+
 #pragma pack(push, 1) 
 struct GeneralPointI {
     float x;
@@ -74,33 +71,30 @@ struct LivoxPoint {
     uint8_t line;
 };
 #pragma pack(pop)
-// ����ǰ�˵�һ֡����
+
 struct GeneralCloudFrame {
     uint64_t timestamp;
     QString frame_id;
     std::vector<GeneralPointIRGB> points;
 };
 
-// ����ǰ�˵�һ֡ͼ��
 struct ImageFrame {
     uint64_t timestamp;
     QImage image;
 };
 
 struct Pose {
-    double x, y, z;          // λ��
-    double qx, qy, qz, qw;   // ��Ԫ����̬
+    double x, y, z;
+    double qx, qy, qz, qw;
 };
 
-// �ٶ���Ϣ
 struct Twist {
     double linear_x, linear_y, linear_z;
     double angular_x, angular_y, angular_z;
 };
 
-// ����ǰ�˵�һ֡��̼�����
 struct OdomFrame {
-    uint64_t timestamp;// ���뼶ʱ���
+    uint64_t timestamp;
     int index;
     QString frame_id;
     QString child_frame_id;
