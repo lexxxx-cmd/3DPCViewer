@@ -17,7 +17,6 @@ VisualAreaWidget::VisualAreaWidget(QWidget* parent) : QWidget(parent), ui(new Ui
 }
 
 void VisualAreaWidget::initOSG() {
-    //位姿节点
     _camViz = std::make_unique<OdomCameraVisualizer>();
     _pathViz = std::make_unique<OdomPathVisualizer>();
     _gridViz = std::make_unique<Grid>(100);
@@ -36,9 +35,6 @@ void VisualAreaWidget::initOSG() {
     viewer->getCamera()->setClearColor(osg::Vec4(0.5, 0.7, 1.0, 1.0));
 }
 
-
-
-
 void VisualAreaWidget::updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, bool isFirstLoad) {
     m_cloudGeom = geom;
 
@@ -49,9 +45,6 @@ void VisualAreaWidget::updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, boo
     m_cloudGeode = new osg::Geode();
     m_cloudGeode->addDrawable(m_cloudGeom);
 
-    // 重新应用之前的点大小和透明度
-    
-
     m_root->addChild(m_cloudGeode);
 
     if (isFirstLoad) {
@@ -61,24 +54,22 @@ void VisualAreaWidget::updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, boo
 }
 
 void VisualAreaWidget::onChangeSizeRequested(const int& size) {
-    if (_livoxViz)
-    {
+    if (_livoxViz) {
         _livoxViz->updatePointSize(size);
     }
     m_osgWidget->update();
 }
 
 void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
-    if (_livoxViz)
-    {
+    if (_livoxViz) {
         _livoxViz->updateOpacity(opacity);
     }
     m_osgWidget->update();
 }
 
 void VisualAreaWidget::onChangeBgColorRequested(const QColor& color) {
-	m_osgWidget->getOsgViewer()->getCamera()->setClearColor(osg::Vec4(color.redF(), color.greenF(), color.blueF(), 1.0f));
-	m_osgWidget->update();
+    m_osgWidget->getOsgViewer()->getCamera()->setClearColor(osg::Vec4(color.redF(), color.greenF(), color.blueF(), 1.0f));
+    m_osgWidget->update();
 }
 
 VisualAreaWidget::~VisualAreaWidget() {
@@ -88,23 +79,19 @@ VisualAreaWidget::~VisualAreaWidget() {
 }
 
 void VisualAreaWidget::onCloudFrameReady(const GeneralCloudFrame& frame) {
-    if (_livoxViz)
-    {
+    if (_livoxViz) {
         _livoxViz->updateCloud(frame.points);
     }
     m_osgWidget->update();
 }
 
 void VisualAreaWidget::onOdomFrameReady(const OdomFrame& frame) {
-    if (_camViz)
-    {
-        // 更新 OSG 节点
-        _camViz->updatePose(frame.pose.x,frame.pose.y,frame.pose.z,
-            frame.pose.qx,frame.pose.qy,frame.pose.qz,frame.pose.qw);
+    if (_camViz) {
+        _camViz->updatePose(frame.pose.x, frame.pose.y, frame.pose.z,
+            frame.pose.qx, frame.pose.qy, frame.pose.qz, frame.pose.qw);
     }
 
-    if (_pathViz)
-    {
+    if (_pathViz) {
         _pathViz->updatePose(frame.pose.x, frame.pose.y, frame.pose.z, frame.index);
     }
     m_osgWidget->update();

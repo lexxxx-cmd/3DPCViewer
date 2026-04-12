@@ -1,25 +1,23 @@
 #pragma once
 
 #include <QObject>
-#include <iostream>
 #include <memory>
 #include "ui/PCViewer.h"
 #include "DataService.h"
 
 class Controller : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	Controller(QObject *parent);
-	~Controller();
+    Controller(QObject *parent);
+    ~Controller();
 
-
-	void run();
+    void run();
 
 private:
-	void setupConnections();
+    void setupConnections();
 
-	std::unique_ptr<PCViewer> m_viewer;
-	std::unique_ptr<DataService> m_dataService;
+    std::unique_ptr<PCViewer> m_viewer;
+    std::unique_ptr<DataService> m_dataService;
 };

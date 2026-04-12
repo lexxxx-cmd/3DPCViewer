@@ -17,26 +17,20 @@ DatabaseWorker::~DatabaseWorker()
     QSqlDatabase::removeDatabase(QString::fromLatin1(DB_CONN_NAME));
 }
 
-// ---------------------------------------------------------------------------
-// initDatabase  –  must run in the worker thread
-// ---------------------------------------------------------------------------
 void DatabaseWorker::initDatabase(const QString& dbPath)
 {
     m_db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"),
-                                     QString::fromLatin1(DB_CONN_NAME));
+        QString::fromLatin1(DB_CONN_NAME));
     m_db.setDatabaseName(dbPath);
 
     if (!m_db.open()) {
         qWarning() << "DatabaseWorker: failed to open" << dbPath
-                   << m_db.lastError().text();
+            << m_db.lastError().text();
         return;
     }
 
     QSqlQuery q(m_db);
 
-    // -----------------------------------------------------------------------
-    // ROS2 standard tables (fields must not be altered)
-    // -----------------------------------------------------------------------
     q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS topics ("
         "  id                    INTEGER PRIMARY KEY,"
@@ -55,9 +49,6 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
         "  data      BLOB    NOT NULL"
         ");"));
 
-    // -----------------------------------------------------------------------
-    // Custom extension table: tracks which .bag file each bag_index came from
-    // -----------------------------------------------------------------------
     q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS internal_bag_info ("
         "  bag_index   INTEGER PRIMARY KEY,"
@@ -65,11 +56,9 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
         "  import_time DATETIME DEFAULT CURRENT_TIMESTAMP"
         ");"));
 
-    // Index to speed up time-range queries
     q.exec(QStringLiteral(
         "CREATE INDEX IF NOT EXISTS timestamp_idx ON messages (timestamp);"));
 
-    // Index for efficient msg_index queries
     q.exec(QStringLiteral(
         "CREATE INDEX IF NOT EXISTS msg_index_idx ON messages (msg_index);"));
 
@@ -77,26 +66,21 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
     qDebug() << "DatabaseWorker: database initialized at" << dbPath;
 }
 
-// ---------------------------------------------------------------------------
-// saveMessage
-// ---------------------------------------------------------------------------
 void DatabaseWorker::saveMessage(const RawBagMessage& msg, int msgIndex)
 {
     if (!m_initialized) {
         qWarning() << "DatabaseWorker: not initialized, dropping message for"
-                   << msg.topicName;
+            << msg.topicName;
         return;
     }
 
-    // Embed the bag index into the topic name so the ROS2 schema stays clean.
     const QString virtualTopic =
         QStringLiteral("/bag%1%2").arg(msg.bagIndex).arg(msg.topicName);
 
     const int topicId = getOrRegisterTopicId(virtualTopic, msg.typeName);
 
-    m_messageBuffer.append({topicId, msg.timestampNs, msgIndex, msg.rawData});
+    m_messageBuffer.append({ topicId, msg.timestampNs, msgIndex, msg.rawData });
 
-    // Track max message count per bag
     int currentMax = m_bagMaxMessageCount.value(msg.bagIndex, -1);
     if (msgIndex > currentMax) {
         m_bagMaxMessageCount[msg.bagIndex] = msgIndex;
@@ -107,17 +91,11 @@ void DatabaseWorker::saveMessage(const RawBagMessage& msg, int msgIndex)
     }
 }
 
-// ---------------------------------------------------------------------------
-// flushBuffer
-// ---------------------------------------------------------------------------
 void DatabaseWorker::flushBuffer()
 {
     commitBatch();
 }
 
-// ---------------------------------------------------------------------------
-// private helpers
-// ---------------------------------------------------------------------------
 void DatabaseWorker::commitBatch()
 {
     if (m_messageBuffer.isEmpty()) {
@@ -149,15 +127,13 @@ void DatabaseWorker::commitBatch()
 }
 
 int DatabaseWorker::getOrRegisterTopicId(const QString& topicName,
-                                          const QString& typeName)
+    const QString& typeName)
 {
-    // Fast path: local cache
     auto it = m_topicIdCache.find(topicName);
     if (it != m_topicIdCache.end()) {
         return it.value();
     }
 
-    // Check whether the topic already exists in the DB
     QSqlQuery sel(m_db);
     sel.prepare(QStringLiteral("SELECT id FROM topics WHERE name = ?"));
     sel.addBindValue(topicName);
@@ -168,7 +144,6 @@ int DatabaseWorker::getOrRegisterTopicId(const QString& topicName,
         return id;
     }
 
-    // Insert a new row
     QSqlQuery ins(m_db);
     ins.prepare(QStringLiteral(
         "INSERT INTO topics (name, type, serialization_format, offered_qos_profiles)"
@@ -185,9 +160,6 @@ int DatabaseWorker::getOrRegisterTopicId(const QString& topicName,
     return id;
 }
 
-// ---------------------------------------------------------------------------
-// loadMessagesAt
-// ---------------------------------------------------------------------------
 std::vector<RawBagMessage> DatabaseWorker::loadMessagesAt(int bagIndex, int msgIndex)
 {
     std::vector<RawBagMessage> result;
@@ -219,8 +191,8 @@ std::vector<RawBagMessage> DatabaseWorker::loadMessagesAt(int bagIndex, int msgI
         if (prefixedTopic.startsWith(bagPrefix)) {
             const QString topicSuffix = prefixedTopic.mid(bagPrefix.size());
             rawTopic = topicSuffix.startsWith(QLatin1Char('/'))
-                           ? topicSuffix
-                           : (QStringLiteral("/") + topicSuffix);
+                ? topicSuffix
+                : (QStringLiteral("/") + topicSuffix);
         }
 
         RawBagMessage msg;
@@ -235,9 +207,6 @@ std::vector<RawBagMessage> DatabaseWorker::loadMessagesAt(int bagIndex, int msgI
     return result;
 }
 
-// ---------------------------------------------------------------------------
-// getMaxMessageCount
-// ---------------------------------------------------------------------------
 int DatabaseWorker::getMaxMessageCount(int bagIndex)
 {
     if (m_initialized) {
@@ -252,7 +221,6 @@ int DatabaseWorker::getMaxMessageCount(int bagIndex)
 
         if (q.exec() && q.next()) {
             int maxIdx = q.value(0).toInt();
-            // maxIdx is 0-based, so count = maxIdx + 1
             return maxIdx + 1;
         }
     }
