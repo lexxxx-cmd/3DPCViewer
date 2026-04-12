@@ -51,6 +51,7 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
         "  id        INTEGER PRIMARY KEY,"
         "  topic_id  INTEGER NOT NULL,"
         "  timestamp INTEGER NOT NULL,"
+        "  msg_index INTEGER NOT NULL,"
         "  data      BLOB    NOT NULL"
         ");"));
 
@@ -68,6 +69,10 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
     q.exec(QStringLiteral(
         "CREATE INDEX IF NOT EXISTS timestamp_idx ON messages (timestamp);"));
 
+    // Index for efficient msg_index queries
+    q.exec(QStringLiteral(
+        "CREATE INDEX IF NOT EXISTS msg_index_idx ON messages (msg_index);"));
+
     m_initialized = true;
     qDebug() << "DatabaseWorker: database initialized at" << dbPath;
 }
@@ -75,7 +80,7 @@ void DatabaseWorker::initDatabase(const QString& dbPath)
 // ---------------------------------------------------------------------------
 // saveMessage
 // ---------------------------------------------------------------------------
-void DatabaseWorker::saveMessage(const RawBagMessage& msg)
+void DatabaseWorker::saveMessage(const RawBagMessage& msg, int msgIndex)
 {
     if (!m_initialized) {
         qWarning() << "DatabaseWorker: not initialized, dropping message for"
@@ -89,7 +94,14 @@ void DatabaseWorker::saveMessage(const RawBagMessage& msg)
 
     const int topicId = getOrRegisterTopicId(virtualTopic, msg.typeName);
 
-    m_messageBuffer.append({topicId, msg.timestampNs, msg.rawData});
+    m_messageBuffer.append({topicId, msg.timestampNs, msgIndex, msg.rawData});
+
+    // Track max message count per bag
+    int currentMax = m_bagMaxMessageCount.value(msg.bagIndex, -1);
+    if (msgIndex > currentMax) {
+        m_bagMaxMessageCount[msg.bagIndex] = msgIndex;
+    }
+
     if (m_messageBuffer.size() >= BATCH_SIZE) {
         commitBatch();
     }
@@ -115,11 +127,12 @@ void DatabaseWorker::commitBatch()
     m_db.transaction();
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
-        "INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)"));
+        "INSERT INTO messages (topic_id, timestamp, msg_index, data) VALUES (?, ?, ?, ?)"));
 
     for (const PendingMessage& pm : m_messageBuffer) {
         q.addBindValue(pm.topicId);
         q.addBindValue(pm.timestampNs);
+        q.addBindValue(pm.msgIndex);
         q.addBindValue(pm.data);
         if (!q.exec()) {
             qWarning() << "DatabaseWorker: insert failed:" << q.lastError().text();
@@ -172,11 +185,14 @@ int DatabaseWorker::getOrRegisterTopicId(const QString& topicName,
     return id;
 }
 
-std::vector<RawBagMessage> DatabaseWorker::loadMessagesByBagIndex(int bagIndex)
+// ---------------------------------------------------------------------------
+// loadMessagesAt
+// ---------------------------------------------------------------------------
+std::vector<RawBagMessage> DatabaseWorker::loadMessagesAt(int bagIndex, int msgIndex)
 {
     std::vector<RawBagMessage> result;
     if (!m_initialized) {
-        qWarning() << "DatabaseWorker: not initialized, cannot load bag index" << bagIndex;
+        qWarning() << "DatabaseWorker: not initialized, cannot load messages at index" << msgIndex;
         return result;
     }
 
@@ -187,12 +203,13 @@ std::vector<RawBagMessage> DatabaseWorker::loadMessagesByBagIndex(int bagIndex)
         "SELECT t.name, t.type, m.timestamp, m.data "
         "FROM messages m "
         "JOIN topics t ON t.id = m.topic_id "
-        "WHERE t.name LIKE ? "
-        "ORDER BY t.name ASC, m.timestamp ASC, m.id ASC"));
+        "WHERE t.name LIKE ? AND m.msg_index = ? "
+        "ORDER BY t.name ASC"));
     q.addBindValue(bagPrefix + QStringLiteral("%"));
+    q.addBindValue(msgIndex);
 
     if (!q.exec()) {
-        qWarning() << "DatabaseWorker: query bag messages failed:" << q.lastError().text();
+        qWarning() << "DatabaseWorker: query messages failed:" << q.lastError().text();
         return result;
     }
 
@@ -216,4 +233,29 @@ std::vector<RawBagMessage> DatabaseWorker::loadMessagesByBagIndex(int bagIndex)
     }
 
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// getMaxMessageCount
+// ---------------------------------------------------------------------------
+int DatabaseWorker::getMaxMessageCount(int bagIndex)
+{
+    if (m_initialized) {
+        const QString bagPrefix = QStringLiteral("/bag%1/").arg(bagIndex);
+
+        QSqlQuery q(m_db);
+        q.prepare(QStringLiteral(
+            "SELECT MAX(m.msg_index) FROM messages m "
+            "JOIN topics t ON t.id = m.topic_id "
+            "WHERE t.name LIKE ?"));
+        q.addBindValue(bagPrefix + QStringLiteral("%"));
+
+        if (q.exec() && q.next()) {
+            int maxIdx = q.value(0).toInt();
+            // maxIdx is 0-based, so count = maxIdx + 1
+            return maxIdx + 1;
+        }
+    }
+
+    return m_bagMaxMessageCount.value(bagIndex, 0);
 }

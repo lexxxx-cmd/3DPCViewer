@@ -4,7 +4,6 @@
 #include <QDebug>
 #include <QImage>
 #include <execution>
-#include <future>
 #include <numeric>
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
@@ -17,16 +16,9 @@ void BagWorker::stopProcessing() {
     m_stopFlag = true;
 }
 
-void BagWorker::clearCurrentCache() {
-    m_bagCache.clear();
-    m_bagTimestamps.clear();
-    m_bagTopicTypes.clear();
-}
-
 void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     m_stopFlag = false;
     m_currentBagIndex = bagIndex;
-    clearCurrentCache();
 
     // Open bag once to retrieve the topic list (metadata only, very fast).
     Rosbag bag(bagPath.toStdString());
@@ -68,14 +60,35 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
             }));
     }
 
-    // Collect results and build the cache.
+    // Collect results and build the DB write pipeline.
     int max_size = 0;
     for (auto& fut : futures) {
         auto td = fut.get();
         max_size = std::max(max_size, static_cast<int>(td.payloads.size()));
-        m_bagTimestamps[td.topic] = std::move(td.timestamps);
-        m_bagTopicTypes[td.topic] = std::move(td.typeName);
-        m_bagCache[td.topic]      = std::move(td.payloads);
+
+        // Emit each payload for DB storage (passing msgIndex for database)
+        const std::string& topic = td.topic;
+        const std::string& typeName = td.typeName;
+
+        for (size_t i = 0; i < td.payloads.size(); ++i) {
+            if (m_stopFlag) break;
+
+            const auto& payload = td.payloads[i];
+            int msgIndex = static_cast<int>(i);
+
+            RawBagMessage msg;
+            msg.bagIndex    = bagIndex;
+            msg.topicName   = QString::fromStdString(topic);
+            msg.typeName    = QString::fromStdString(typeName);
+            msg.timestampNs = (i < td.timestamps.size()) ? td.timestamps[i] : 0LL;
+
+            CDRConverter::packRawBytesToCDR(
+                reinterpret_cast<const char*>(payload.data()),
+                static_cast<int>(payload.size()),
+                msg.rawData);
+
+            emit parsedMessageReady(msg, msgIndex);
+        }
     }
 
     // Verify that at least one message was read.
@@ -85,100 +98,46 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     }
     emit messageNumReady(max_size);
 
-    // -----------------------------------------------------------------------
-    // DB pipeline: wrap every payload in a DDS-CDR frame and emit it so
-    // DatabaseWorker can persist the data asynchronously.
-    // -----------------------------------------------------------------------
-    for (const auto& [topic, payloads] : m_bagCache) {
-        if (m_stopFlag) break;
-
-        const auto& timestamps = m_bagTimestamps[topic];
-        const std::string& typeName = m_bagTopicTypes[topic];
-
-        for (size_t i = 0; i < payloads.size(); ++i) {
-            if (m_stopFlag) break;
-
-            const auto& payload = payloads[i];
-            RawBagMessage msg;
-            msg.bagIndex    = bagIndex;
-            msg.topicName   = QString::fromStdString(topic);
-            msg.typeName    = QString::fromStdString(typeName);
-            msg.timestampNs = (i < timestamps.size()) ? timestamps[i] : 0LL;
-
-            CDRConverter::packRawBytesToCDR(
-                reinterpret_cast<const char*>(payload.data()),
-                static_cast<int>(payload.size()),
-                msg.rawData);
-
-            emit parsedMessageReady(msg);
-        }
-    }
-
     emit finished();
 }
 
-void BagWorker::rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& messages, int bagIndex) {
-    m_stopFlag = false;
-    m_currentBagIndex = bagIndex;
-    clearCurrentCache();
-
-    std::size_t maxSize = 0;
+// ---------------------------------------------------------------------------
+// parseMessages - Parse raw messages from DB and emit frame signals
+// ---------------------------------------------------------------------------
+void BagWorker::parseMessages(const std::vector<RawBagMessage>& messages, int msgIndex) {
     for (const RawBagMessage& msg : messages) {
-        const std::string topic = msg.topicName.toStdString();
+        if (m_stopFlag) break;
+
         const QByteArray& cdrData = msg.rawData;
-        // Raw data in DB is CDR-wrapped; skip the 4-byte DDS encapsulation header
-        // so cached payload stays identical to original ROS1 bytes used by parsers.
         if (cdrData.size() <= kCdrEncapsulationHeaderSize) {
             continue;
         }
 
+        // Strip the 4-byte DDS encapsulation header
         const auto* payloadBegin =
             reinterpret_cast<const uint8_t*>(cdrData.constData() + kCdrEncapsulationHeaderSize);
         const auto* payloadEnd =
             reinterpret_cast<const uint8_t*>(cdrData.constData() + cdrData.size());
-        std::vector<uint8_t> payload;
-        payload.reserve(static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize));
-        payload.insert(payload.end(), payloadBegin, payloadEnd);
+        size_t payloadSize = static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize);
 
-        auto& payloads = m_bagCache[topic];
-        payloads.emplace_back(std::move(payload));
-        m_bagTimestamps[topic].push_back(msg.timestampNs);
-        m_bagTopicTypes[topic] = msg.typeName.toStdString();
-        maxSize = std::max(maxSize, payloads.size());
-    }
+        const std::string topic = msg.topicName.toStdString();
 
-    std::vector<std::string> bagTopicList;
-    bagTopicList.reserve(m_bagCache.size());
-    for (const auto& cacheEntry : m_bagCache) {
-        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + cacheEntry.first);
-    }
-
-    emit topicListReady(bagTopicList);
-    emit messageNumReady(static_cast<int>(maxSize));
-    emit finished();
-}
-
-void BagWorker::updateProgress(const int value) {
-    for (const auto& topicItem : m_bagCache) {
-        if (value < m_bagCache[topicItem.first].size()) {
-            const auto& payload = m_bagCache[topicItem.first][value];
-            if (topicItem.first == "/livox/lidar") {
-                GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/cloud_registered") {
-                GeneralCloudFrame frame = parseSensorPC2Payload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/usb_cam/image_raw/compressed") {
-                ImageFrame frame = parseImagePayload(payload.data(), payload.size());
-                emit imageFrameReady(frame);
-            }
-            else if (topicItem.first == "/aft_mapped_to_init") {
-                OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
-                frame.index = value;
-                emit odomFrameReady(frame);
-            }
+        if (topic == "/livox/lidar") {
+            GeneralCloudFrame frame = parseLivoxPayload(payloadBegin, payloadSize);
+            emit cloudFrameReady(frame);
+        }
+        else if (topic == "/cloud_registered") {
+            GeneralCloudFrame frame = parseSensorPC2Payload(payloadBegin, payloadSize);
+            emit cloudFrameReady(frame);
+        }
+        else if (topic == "/usb_cam/image_raw/compressed") {
+            ImageFrame frame = parseImagePayload(payloadBegin, payloadSize);
+            emit imageFrameReady(frame);
+        }
+        else if (topic == "/aft_mapped_to_init") {
+            OdomFrame frame = parseOdomPayload(payloadBegin, payloadSize);
+            frame.index = msgIndex;
+            emit odomFrameReady(frame);
         }
     }
 }
@@ -367,7 +326,7 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
-    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec; // 锟较筹拷锟斤拷锟诫级时锟斤拷锟�
+    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
 
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     odom.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
@@ -380,7 +339,7 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     odom.pose.x = *(double*)(payload + offset); offset += 8;
     odom.pose.y = *(double*)(payload + offset); offset += 8;
     odom.pose.z = *(double*)(payload + offset); offset += 8;
-    
+
     odom.pose.qx = *(double*)(payload + offset); offset += 8;
     odom.pose.qy = *(double*)(payload + offset); offset += 8;
     odom.pose.qz = *(double*)(payload + offset); offset += 8;
@@ -397,12 +356,9 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     odom.twist.angular_y = *(double*)(payload + offset); offset += 8;
     odom.twist.angular_z = *(double*)(payload + offset); offset += 8;
 
-    // 锟斤拷锟斤拷 Twist 锟斤拷协锟斤拷锟斤拷锟斤拷锟� (36 * 8 锟街斤拷)
-    offset += (36 * 8);
-
-    // 越锟斤拷锟斤拷
+    // 越界检查
     if (offset > length) {
-        qWarning() << "Odometry 锟斤拷锟捷斤拷锟斤拷越锟界，锟斤拷锟斤拷锟斤拷锟捷帮拷锟斤拷锟斤拷锟斤拷锟斤拷";
+        qWarning() << "Odometry 数据包越界！";
     }
 
 

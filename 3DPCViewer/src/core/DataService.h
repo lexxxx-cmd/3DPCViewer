@@ -19,9 +19,8 @@ QThread*   getThread() const { return m_workerThread; }
 
 public slots:
 void startProcess(const QString& path);
-void updateProgress(const int value);
+void updateProgress(const int msgIndex);
 void stopProcess();
-void loadBagFromDatabase(int bagIndex);
 
 signals:
 void cloudFrameReady(const GeneralCloudFrame& frame);
@@ -47,5 +46,6 @@ QThread*        m_dbThread{nullptr};
 
 int m_nextBagIndex{1};
 int m_currentBagIndex{0};
+int m_maxMessageCount{0};
 bool m_importInProgress{false};
 };

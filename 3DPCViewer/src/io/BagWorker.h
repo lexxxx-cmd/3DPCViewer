@@ -3,7 +3,6 @@
 #include <QObject>
 #include <QString>
 #include <QThread>
-#include <unordered_map>
 #include "BagDataTypes.h"
 
 class BagWorker : public QObject
@@ -14,13 +13,13 @@ public:
 explicit BagWorker(QObject *parent = nullptr);
 ~BagWorker() = default;
 
-    void rebuildCacheFromDbMessages(const std::vector<RawBagMessage>& messages, int bagIndex);
-
 public slots:
     // bagIndex: 1-based counter supplied by DataService to distinguish imports
     void processBag(const QString& bagPath, int bagIndex);
 
-    void updateProgress(const int value);
+    // Parse raw messages from DB and emit frame signals
+    void parseMessages(const std::vector<RawBagMessage>& messages, int msgIndex);
+
     void stopProcessing();
 
 signals:
@@ -32,20 +31,16 @@ signals:
     void messageNumReady(int num);
 
     // CDR-encoded message ready for DatabaseWorker
-    void parsedMessageReady(const RawBagMessage& msg);
+    // Also includes msgIndex for DB storage
+    void parsedMessageReady(const RawBagMessage& msg, int msgIndex);
 
     void errorOccur(const QString& errorMsg);
 
     void finished();
 
 private:
-    void clearCurrentCache();
-
     std::atomic<bool> m_stopFlag;
     int m_currentBagIndex{0};
-    std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> m_bagCache;
-    std::unordered_map<std::string, std::vector<int64_t>>              m_bagTimestamps;
-    std::unordered_map<std::string, std::string>                       m_bagTopicTypes;
 
     GeneralCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
     GeneralCloudFrame parseSensorPC2Payload(const uint8_t* payload, size_t length);
