@@ -4,10 +4,8 @@
 #include <QByteArray>
 #include <vector>
 #include <cstdint>
-#include <QMetaType> // 元类型注册
-
+#include <QMetaType>
 #include <array>
-#include <cstdint>
 #include <algorithm>
 
 struct ColorRGB {
@@ -19,20 +17,15 @@ constexpr std::array<ColorRGB, 256> generateJetLUT() {
     for (int i = 0; i < 256; ++i) {
         float v = i / 255.0f;
         float r = 0.0f, g = 0.0f, b = 0.0f;
-
         if (v < 0.25f) {
             r = 0.0f; g = 4.0f * v; b = 1.0f;
-        }
-        else if (v < 0.5f) {
+        } else if (v < 0.5f) {
             r = 0.0f; g = 1.0f; b = 1.0f - 4.0f * (v - 0.25f);
-        }
-        else if (v < 0.75f) {
+        } else if (v < 0.75f) {
             r = 4.0f * (v - 0.5f); g = 1.0f; b = 0.0f;
-        }
-        else {
+        } else {
             r = 1.0f; g = 1.0f - 4.0f * (v - 0.75f); b = 0.0f;
         }
-
         lut[i].r = static_cast<uint8_t>(r * 255.0f);
         lut[i].g = static_cast<uint8_t>(g * 255.0f);
         lut[i].b = static_cast<uint8_t>(b * 255.0f);
@@ -51,7 +44,7 @@ struct GeneralPointI {
 };
 #pragma pack(pop)
 
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
 struct GeneralPointIRGB {
     GeneralPointI pointI;
     uint8_t r;
@@ -60,7 +53,7 @@ struct GeneralPointIRGB {
 };
 #pragma pack(pop)
 
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
 struct LivoxPoint {
     uint32_t offset_time;
     float x;
@@ -102,20 +95,10 @@ struct OdomFrame {
     Twist twist;
 };
 
-// 注册元类型，以便跨线程信号槽传递
 Q_DECLARE_METATYPE(GeneralCloudFrame)
 Q_DECLARE_METATYPE(ImageFrame)
 Q_DECLARE_METATYPE(OdomFrame)
 
-// ---------------------------------------------------------------------------
-// RawBagMessage — cross-thread payload for the DB-write pipeline
-// ---------------------------------------------------------------------------
-// topicName  : original ROS topic, e.g. "/livox/lidar"
-// typeName   : ROS message type, e.g. "sensor_msgs/PointCloud2"
-// timestampNs: message timestamp in nanoseconds (from the bag record header)
-// rawData    : DDS-CDR encoded blob produced by CDRConverter
-// bagIndex   : 1-based counter identifying which imported .bag file this
-//              message belongs to (set by DataService)
 struct RawBagMessage {
     int        bagIndex{1};
     QString    topicName;

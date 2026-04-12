@@ -23,15 +23,15 @@ public:
 	InteractionWidget* getInteractionWidget() const { return ui->InterWidget; }
 
 public slots:
-	void onFileSizeUpdated(const int& size); // 接收上层：文件大小更新了
-	void onPointSizeUpdated(const int& num); // 接收上层：点云数量更新了
+	void onFileSizeUpdated(const int& size); // 锟斤拷锟斤拷锟较层：锟侥硷拷锟斤拷小锟斤拷锟斤拷锟斤拷
+	void onPointSizeUpdated(const int& num); // 锟斤拷锟斤拷锟较层：锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
 
 signals:
 	void requestLoadFile(const QString& path);
-	void requestProcBag(const QString& path);// 通知上层：用户选了文件
-	void requestUpdateFileSize(const int& size); // 通知下层：文件大小更新了
-	void requestUpdatePointSize(const int& num); // 通知下层：点云数量更新了
-	void requestUpdateFPS(const int& fps); // 通知下层：FPS更新了
+	void requestProcBag(const QString& path);// 通知锟较层：锟矫伙拷选锟斤拷锟侥硷拷
+	void requestUpdateFileSize(const int& size); // 通知锟铰层：锟侥硷拷锟斤拷小锟斤拷锟斤拷锟斤拷
+	void requestUpdatePointSize(const int& num); // 通知锟铰层：锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
+	void requestUpdateFPS(const int& fps); // 通知锟铰层：FPS锟斤拷锟斤拷锟斤拷
 	void requestShowNormals(const bool& show);
 
 	void pointSizeChanged(const int& value);
@@ -40,10 +40,9 @@ signals:
 
 	void topicListReady(const std::vector<std::string>& topics);
 	void messageNumReady(int num);
-	void progressUpdated(const int value);//通知上层，显示进度更新
+	void progressUpdated(const int value);//通知锟较层，锟斤拷示锟斤拷锟饺革拷锟斤拷
 	void onImageFrameReady(const ImageFrame& frame);
 
 private:
 	std::unique_ptr<Ui::ControlPanelWidgetClass> ui;
 };
-

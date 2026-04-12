@@ -4,10 +4,13 @@
 #include <QDebug>
 #include <QImage>
 #include <execution>
-#include <future>
 #include <numeric>
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
+
+namespace {
+constexpr int kCdrEncapsulationHeaderSize = 4;
+}
 
 void BagWorker::stopProcessing() {
     m_stopFlag = true;
@@ -15,34 +18,25 @@ void BagWorker::stopProcessing() {
 
 void BagWorker::processBag(const QString& bagPath, int bagIndex) {
     m_stopFlag = false;
+    m_currentBagIndex = bagIndex;
 
-    // Open bag once to retrieve the topic list (metadata only, very fast).
     Rosbag bag(bagPath.toStdString());
     std::vector<std::string> topicList = bag.getAvailableTopics();
 
-    emit topicListReady(topicList);
-
-    // Guard: if the cache already contains data from this bag, clear it first.
+    std::vector<std::string> bagTopicList;
+    bagTopicList.reserve(topicList.size());
     for (const std::string& topic : topicList) {
-        if (m_bagCache.find(topic) != m_bagCache.end()) {
-            // TODO
-            m_bagCache.clear();
-            m_bagTimestamps.clear();
-            m_bagTopicTypes.clear();
-            return;
-        }
+        bagTopicList.emplace_back("/bag" + std::to_string(bagIndex) + topic);
     }
+    emit topicListReady(bagTopicList);
 
-    // Launch one async task per topic so their payload reads run in parallel.
-    // Each task opens its own Rosbag (and therefore its own file descriptor)
-    // to avoid contention on the shared ifstream.
     const std::string pathStr = bagPath.toStdString();
 
     struct TopicData {
-        std::string                        topic;
-        std::vector<std::vector<uint8_t>>  payloads;
-        std::vector<int64_t>               timestamps;
-        std::string                        typeName;
+        std::string topic;
+        std::vector<std::vector<uint8_t>> payloads;
+        std::vector<int64_t> timestamps;
+        std::string typeName;
     };
 
     std::vector<std::future<TopicData>> futures;
@@ -54,84 +48,82 @@ void BagWorker::processBag(const QString& bagPath, int bagIndex) {
                 qDebug() << "Bag 中可用 Topic:" << QString::fromStdString(topic);
                 Rosbag topicBag(pathStr);
                 TopicData td;
-                td.topic      = topic;
-                td.payloads   = topicBag.getRawPayloads(topic);
+                td.topic = topic;
+                td.payloads = topicBag.getRawPayloads(topic);
                 td.timestamps = topicBag.getMessageTimestamps(topic);
-                td.typeName   = topicBag.getTopicType(topic);
+                td.typeName = topicBag.getTopicType(topic);
                 return td;
             }));
     }
 
-    // Collect results and build the cache.
     int max_size = 0;
     for (auto& fut : futures) {
         auto td = fut.get();
         max_size = std::max(max_size, static_cast<int>(td.payloads.size()));
-        m_bagTimestamps[td.topic] = std::move(td.timestamps);
-        m_bagTopicTypes[td.topic] = std::move(td.typeName);
-        m_bagCache[td.topic]      = std::move(td.payloads);
-    }
 
-    // Verify that at least one message was read.
-    if (max_size == 0) {
-        emit finished();
-        return;
-    }
-    emit messageNumReady(max_size);
+        const std::string& topic = td.topic;
+        const std::string& typeName = td.typeName;
 
-    // -----------------------------------------------------------------------
-    // DB pipeline: wrap every payload in a DDS-CDR frame and emit it so
-    // DatabaseWorker can persist the data asynchronously.
-    // -----------------------------------------------------------------------
-    for (const auto& [topic, payloads] : m_bagCache) {
-        if (m_stopFlag) break;
-
-        const auto& timestamps = m_bagTimestamps[topic];
-        const std::string& typeName = m_bagTopicTypes[topic];
-
-        for (size_t i = 0; i < payloads.size(); ++i) {
+        for (size_t i = 0; i < td.payloads.size(); ++i) {
             if (m_stopFlag) break;
 
-            const auto& payload = payloads[i];
+            const auto& payload = td.payloads[i];
+            int msgIndex = static_cast<int>(i);
+
             RawBagMessage msg;
-            msg.bagIndex    = bagIndex;
-            msg.topicName   = QString::fromStdString(topic);
-            msg.typeName    = QString::fromStdString(typeName);
-            msg.timestampNs = (i < timestamps.size()) ? timestamps[i] : 0LL;
+            msg.bagIndex = bagIndex;
+            msg.topicName = QString::fromStdString(topic);
+            msg.typeName = QString::fromStdString(typeName);
+            msg.timestampNs = (i < td.timestamps.size()) ? td.timestamps[i] : 0LL;
 
             CDRConverter::packRawBytesToCDR(
                 reinterpret_cast<const char*>(payload.data()),
                 static_cast<int>(payload.size()),
                 msg.rawData);
 
-            emit parsedMessageReady(msg);
+            emit parsedMessageReady(msg, msgIndex);
         }
     }
+
+    if (max_size == 0) {
+        emit finished();
+        return;
+    }
+    emit messageNumReady(max_size);
 
     emit finished();
 }
 
-void BagWorker::updateProgress(const int value) {
-    for (const auto& topicItem : m_bagCache) {
-        if (value < m_bagCache[topicItem.first].size()) {
-            const auto& payload = m_bagCache[topicItem.first][value];
-            if (topicItem.first == "/livox/lidar") {
-                GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/cloud_registered") {
-                GeneralCloudFrame frame = parseSensorPC2Payload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/usb_cam/image_raw/compressed") {
-                ImageFrame frame = parseImagePayload(payload.data(), payload.size());
-                emit imageFrameReady(frame);
-            }
-            else if (topicItem.first == "/aft_mapped_to_init") {
-                OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
-                frame.index = value;
-                emit odomFrameReady(frame);
-            }
+void BagWorker::parseMessages(const std::vector<RawBagMessage>& messages, int msgIndex) {
+    for (const RawBagMessage& msg : messages) {
+        if (m_stopFlag) break;
+
+        const QByteArray& cdrData = msg.rawData;
+        if (cdrData.size() <= kCdrEncapsulationHeaderSize) {
+            continue;
+        }
+
+        const auto* payloadBegin =
+            reinterpret_cast<const uint8_t*>(cdrData.constData() + kCdrEncapsulationHeaderSize);
+        const auto* payloadEnd =
+            reinterpret_cast<const uint8_t*>(cdrData.constData() + cdrData.size());
+        size_t payloadSize = static_cast<size_t>(cdrData.size() - kCdrEncapsulationHeaderSize);
+
+        const std::string topic = msg.topicName.toStdString();
+
+        if (topic == "/livox/lidar") {
+            GeneralCloudFrame frame = parseLivoxPayload(payloadBegin, payloadSize);
+            emit cloudFrameReady(frame);
+        } else if (topic == "/cloud_registered") {
+            GeneralCloudFrame frame = parseSensorPC2Payload(payloadBegin, payloadSize);
+            emit cloudFrameReady(frame);
+        } else if (topic == "/usb_cam/image_raw/compressed") {
+            ImageFrame frame = parseImagePayload(payloadBegin, payloadSize);
+            emit imageFrameReady(frame);
+        } else if (topic == "/aft_mapped_to_init") {
+            OdomFrame frame = parseOdomPayload(payloadBegin, payloadSize);
+            frame.index = msgIndex;
+            emit odomFrameReady(frame);
         }
     }
 }
@@ -140,42 +132,38 @@ GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t le
     GeneralCloudFrame frame;
     size_t offset = 0;
 
-    // std_msgs/Header
-    offset += 12; // seq(4) + stamp_sec(4) + stamp_nsec(4)
+    offset += 12;
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
     offset += frame_id_len;
 
-    // Livox CustomMsg Header
-    frame.timestamp = *(uint64_t*)(payload + offset); offset += 8; // timebase
-    uint32_t point_num = *(uint32_t*)(payload + offset); offset += 4; // point_num
-    offset += 1; // lidar_id
-    offset += 3; // rsvd
+    frame.timestamp = *(uint64_t*)(payload + offset); offset += 8;
+    uint32_t point_num = *(uint32_t*)(payload + offset); offset += 4;
+    offset += 1;
+    offset += 3;
 
     uint32_t array_elements = *(uint32_t*)(payload + offset); offset += 4;
 
     frame.points.resize(point_num);
 
-    // Capture offset by value so the parallel lambda reads a stable snapshot.
     const size_t pointsOffset = offset;
 
-    // Use an index range and parallel execution: each point conversion is independent.
     std::vector<uint32_t> indices(point_num);
     std::iota(indices.begin(), indices.end(), 0u);
     std::for_each(std::execution::par_unseq,
-                  indices.begin(), indices.end(),
-                  [&frame, payload, pointsOffset](uint32_t i) {
-                      const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(
-                          payload + pointsOffset + i * sizeof(LivoxPoint));
-                      GeneralPointIRGB& pt = frame.points[i];
-                      pt.pointI.x            = src->x;
-                      pt.pointI.y            = src->y;
-                      pt.pointI.z            = src->z;
-                      pt.pointI.reflectivity = src->reflectivity;
-                      pt.r = JET_LUT[src->reflectivity].r;
-                      pt.g = JET_LUT[src->reflectivity].g;
-                      pt.b = JET_LUT[src->reflectivity].b;
-                  });
+        indices.begin(), indices.end(),
+        [&frame, payload, pointsOffset](uint32_t i) {
+            const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(
+                payload + pointsOffset + i * sizeof(LivoxPoint));
+            GeneralPointIRGB& pt = frame.points[i];
+            pt.pointI.x = src->x;
+            pt.pointI.y = src->y;
+            pt.pointI.z = src->z;
+            pt.pointI.reflectivity = src->reflectivity;
+            pt.r = JET_LUT[src->reflectivity].r;
+            pt.g = JET_LUT[src->reflectivity].g;
+            pt.b = JET_LUT[src->reflectivity].b;
+        });
 
     return frame;
 }
@@ -184,18 +172,15 @@ GeneralCloudFrame BagWorker::parseSensorPC2Payload(const uint8_t* payload, size_
     GeneralCloudFrame frame;
     size_t offset = 0;
 
-    // 解析Header
-    offset += 12; // seq(4) + stamp_sec(4) + stamp_nsec(4)
+    offset += 12;
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
     offset += frame_id_len;
 
-    // 解析height和width
     uint32_t height = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t width = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t point_num = height * width;
 
-    // fields数组
     uint32_t fields_size = *(uint32_t*)(payload + offset); offset += 4;
     struct FieldInfo {
         std::string name;
@@ -233,7 +218,6 @@ GeneralCloudFrame BagWorker::parseSensorPC2Payload(const uint8_t* payload, size_
         if (fields[i].name == "intensity" || fields[i].name == "reflectivity") reflectivity_idx = i;
     }
 
-    // 防止 data_len 不足导致的内存越界崩溃
     if (data_len < point_num * point_step) {
         qWarning() << "PointCloud2 data_len 异常! 预期至少:" << point_num * point_step << "实际:" << data_len;
         point_num = data_len / point_step;
@@ -250,26 +234,22 @@ GeneralCloudFrame BagWorker::parseSensorPC2Payload(const uint8_t* payload, size_
 
         if (reflectivity_idx >= 0) {
             uint8_t dtype = fields[reflectivity_idx].datatype;
-            if (dtype == 7) { // FLOAT32
+            if (dtype == 7) {
                 pt.reflectivity = (uint8_t)(*(float*)(data_ptr + base + fields[reflectivity_idx].offset));
-            }
-            else if (dtype == 2) { // UINT8
+            } else if (dtype == 2) {
                 pt.reflectivity = *(uint8_t*)(data_ptr + base + fields[reflectivity_idx].offset);
-            }
-            else {
-                pt.reflectivity = 0; // 默认值
+            } else {
+                pt.reflectivity = 0;
             }
         }
         frame.points[i].pointI = pt;
 
-        // 解析RGB
         if (rgb_idx >= 0) {
             uint32_t rgb = *(uint32_t*)(data_ptr + base + fields[rgb_idx].offset);
             frame.points[i].r = (rgb >> 16) & 0xFF;
             frame.points[i].g = (rgb >> 8) & 0xFF;
             frame.points[i].b = rgb & 0xFF;
-        }
-        else {
+        } else {
             frame.points[i].r = pt.reflectivity;
             frame.points[i].g = pt.reflectivity;
             frame.points[i].b = pt.reflectivity;
@@ -279,12 +259,10 @@ GeneralCloudFrame BagWorker::parseSensorPC2Payload(const uint8_t* payload, size_
     return frame;
 }
 
-
 ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
     ImageFrame frame;
     size_t offset = 0;
 
-    // 1. 解析 Header
     uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
@@ -299,7 +277,6 @@ ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
 
     uint32_t data_len = *(uint32_t*)(payload + offset); offset += 4;
 
-    // 越界保护
     if (offset + data_len > length) {
         qWarning() << "CompressedImage 数据包不完整，发生越界！";
         return frame;
@@ -320,7 +297,7 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
     uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
-    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec; // 锟较筹拷锟斤拷锟诫级时锟斤拷锟�
+    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
 
     uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
     odom.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
@@ -333,7 +310,7 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     odom.pose.x = *(double*)(payload + offset); offset += 8;
     odom.pose.y = *(double*)(payload + offset); offset += 8;
     odom.pose.z = *(double*)(payload + offset); offset += 8;
-    
+
     odom.pose.qx = *(double*)(payload + offset); offset += 8;
     odom.pose.qy = *(double*)(payload + offset); offset += 8;
     odom.pose.qz = *(double*)(payload + offset); offset += 8;
@@ -345,19 +322,13 @@ OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
     odom.twist.linear_y = *(double*)(payload + offset); offset += 8;
     odom.twist.linear_z = *(double*)(payload + offset); offset += 8;
 
-
     odom.twist.angular_x = *(double*)(payload + offset); offset += 8;
     odom.twist.angular_y = *(double*)(payload + offset); offset += 8;
     odom.twist.angular_z = *(double*)(payload + offset); offset += 8;
 
-    // 锟斤拷锟斤拷 Twist 锟斤拷协锟斤拷锟斤拷锟斤拷锟� (36 * 8 锟街斤拷)
-    offset += (36 * 8);
-
-    // 越锟斤拷锟斤拷
     if (offset > length) {
-        qWarning() << "Odometry 锟斤拷锟捷斤拷锟斤拷越锟界，锟斤拷锟斤拷锟斤拷锟捷帮拷锟斤拷锟斤拷锟斤拷锟斤拷";
+        qWarning() << "Odometry 数据包越界！";
     }
-
 
     return odom;
 }

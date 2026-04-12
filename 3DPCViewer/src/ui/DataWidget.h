@@ -15,10 +15,13 @@ class DataWidget : public QWidget
 public:
 	DataWidget(QWidget *parent = nullptr);
 	~DataWidget();
+
+public slots:
+	void setImportInProgress(bool inProgress);
+
 signals:
-	void requestProcBag(const QString& bagPath); // 通知上层：用户选了 bag 文件，准备开始处理
+	void requestProcBag(const QString& bagPath); // 通知锟较层：锟矫伙拷选锟斤拷 bag 锟侥硷拷锟斤拷准锟斤拷锟斤拷始锟斤拷锟斤拷
 
 private:
 	std::unique_ptr<Ui::DataWidgetClass> ui;
 };
-
