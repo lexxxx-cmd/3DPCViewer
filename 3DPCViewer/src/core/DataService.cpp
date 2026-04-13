@@ -28,20 +28,26 @@ DataService::DataService(QObject* parent) : QObject(parent) {
       const QString& bag_uuid, const QString& topic_name, 
       const QString& msg_type) {
     current_bag_uuid = bag_uuid;
-    
-    QMetaObject::invokeMethod(db_manager, "insertTopic", Qt::QueuedConnection,
-        Q_ARG(QString, bag_uuid), Q_ARG(QString, topic_name), 
-        Q_ARG(QString, msg_type));
+    emit requestInsertTopic(bag_uuid, topic_name, msg_type);
   });
   
   connect(db_manager, &DatabaseManager::payloadReady, bag_worker, &BagWorker::updateProgress);
   connect(bag_worker, &BagWorker::payloadReady, this, [this](
       const QString& topic_name, int msg_index, qint64 timestamp, 
       const QByteArray& payload) {
-    QMetaObject::invokeMethod(db_manager, "storeMessage", Qt::QueuedConnection,
-        Q_ARG(QString, current_bag_uuid), Q_ARG(QString, topic_name),
-        Q_ARG(int, msg_index), Q_ARG(qint64, timestamp), Q_ARG(QByteArray, payload));
+    emit requestStoreMessage(current_bag_uuid, topic_name, msg_index, timestamp, payload);
   });
+
+  connect(this, &DataService::requestInitializeDb, db_manager,
+          &DatabaseManager::initialize, Qt::QueuedConnection);
+  connect(this, &DataService::requestInsertTopic, db_manager,
+          &DatabaseManager::insertTopic, Qt::QueuedConnection);
+  connect(this, &DataService::requestStoreMessage, db_manager,
+          &DatabaseManager::storeMessage, Qt::QueuedConnection);
+  connect(this, &DataService::requestUpdateProgress, db_manager,
+          &DatabaseManager::updateProgress, Qt::QueuedConnection);
+  connect(this, &DataService::requestProcessBag, bag_worker,
+          &BagWorker::processBag, Qt::QueuedConnection);
 
   if (!worker_thread->isRunning()) {
     worker_thread->start();
@@ -58,23 +64,16 @@ DataService::~DataService() {
 
 void DataService::startProcess(const QString& path) {
   if (bag_worker && db_manager) {
-    QMetaObject::invokeMethod(db_manager, "initialize", Qt::QueuedConnection,
-        Q_ARG(QString, path));
-    
-    QMetaObject::invokeMethod(bag_worker, "processBag",
-                              Qt::QueuedConnection,
-                              Q_ARG(QString, path));
+    emit requestInitializeDb(path);
+    emit requestProcessBag(path);
   }
 }
 
 void DataService::updateProgress(const int value) {
   if (db_manager) {
-    QMetaObject::invokeMethod(db_manager, "updateProgress",
-                              Qt::QueuedConnection,
-                              Q_ARG(int, value));
+    emit requestUpdateProgress(value);
   }
 }
 
 void DataService::stopProcess() {
 }
-

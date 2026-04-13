@@ -31,6 +31,16 @@ class DataService : public QObject {
   void errorOccur(const QString& error_msg);
   void finished();
 
+  // Internal signals for cross-thread communication (replacing invokeMethod)
+  void requestInitializeDb(const QString& bag_path);
+  void requestInsertTopic(const QString& bag_uuid, const QString& topic_name,
+                          const QString& msg_type);
+  void requestStoreMessage(const QString& bag_uuid, const QString& topic_name,
+                           int msg_index, qint64 timestamp,
+                           const QByteArray& payload);
+  void requestUpdateProgress(int percent);
+  void requestProcessBag(const QString& path);
+
  private:
   BagWorker* bag_worker;
   QThread* worker_thread;
