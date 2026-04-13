@@ -15,7 +15,7 @@ class BagWorker : public QObject {
 
  public slots:
   void processBag(const QString& bag_path);
-  void updateProgress(const int value);
+  void updateProgress(const QString& topic_name, const int percent, const QByteArray& payload_data);
   void stopProcessing();
 
  signals:
@@ -27,11 +27,17 @@ class BagWorker : public QObject {
   void messageNumReady(int num);
   void errorOccur(const QString& error_msg);
   void finished();
+  
+  void topicInfoReady(const QString& bag_uuid, const QString& topic_name, 
+                      const QString& msg_type);
+  void payloadReady(const QString& topic_name, int msg_index, qint64 timestamp, 
+                    const QByteArray& payload);
+  void requestPayload(const QString& topic_name, int msg_index);
 
  private:
   std::atomic<bool> stop_flag;
-  std::unordered_map<std::string, std::vector<std::vector<uint8_t>>> bag_cache;
-
+  
+  QString generateUUID();
   GeneralCloudFrame parseLivoxPayload(const uint8_t* payload, size_t length);
   GeneralCloudFrame parseSensorPc2Payload(const uint8_t* payload, size_t length);
   ImageFrame parseImagePayload(const uint8_t* payload, size_t length);

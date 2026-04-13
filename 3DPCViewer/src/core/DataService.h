@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QThread>
 #include "io/BagWorker.h"
+#include "io/DatabaseManager.h"
 
 class DataService : public QObject {
   Q_OBJECT
@@ -13,6 +14,7 @@ class DataService : public QObject {
 
   BagWorker* getWorker() const { return bag_worker; }
   QThread* getThread() const { return worker_thread; }
+  DatabaseManager* getDbManager() const { return db_manager; }
 
  public slots:
   void startProcess(const QString& path);
@@ -32,4 +34,6 @@ class DataService : public QObject {
  private:
   BagWorker* bag_worker;
   QThread* worker_thread;
+  DatabaseManager* db_manager;
+  QString current_bag_uuid;
 };

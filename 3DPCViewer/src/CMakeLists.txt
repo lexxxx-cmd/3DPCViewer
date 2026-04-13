@@ -19,6 +19,7 @@ target_link_libraries(3DPCViewer PRIVATE
 	Qt${QT_VERSION_MAJOR}::Widgets
 	Qt${QT_VERSION_MAJOR}::Concurrent
 	Qt${QT_VERSION_MAJOR}::OpenGL
+	Qt${QT_VERSION_MAJOR}::Sql
 	${PCL_LIBRARIES}
 	${OPENSCENEGRAPH_LIBRARIES}
 	rosbag_reader_core

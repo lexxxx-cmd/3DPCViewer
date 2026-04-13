@@ -2,6 +2,7 @@
 #include "core/rosbag.h"
 #include <QDebug>
 #include <QImage>
+#include <QUuid>
 #include <execution>
 #include <future>
 #include <numeric>
@@ -12,19 +13,26 @@ void BagWorker::stopProcessing() {
   stop_flag = true;
 }
 
+QString BagWorker::generateUUID() {
+    return QUuid::createUuid().toString(QUuid::WithoutBraces);
+}
+
 void BagWorker::processBag(const QString& bag_path) {
   stop_flag = false;
 
   Rosbag bag(bag_path.toStdString());
   std::vector<std::string> topic_list = bag.getAvailableTopics();
+  std::vector<std::string> type_list = bag.getAvailableTypes();
 
   emit topicListReady(topic_list);
+  
+  QString bag_uuid = generateUUID();
 
-  for (const std::string& topic : topic_list) {
-    if (bag_cache.find(topic) != bag_cache.end()) {
-      bag_cache.clear();
-      return;
-    }
+  for (int i = 0; i < topic_list.size(); i++) {
+    std::string topic = topic_list[i];
+    std::string msg_type = type_list[i];
+    
+    emit topicInfoReady(bag_uuid, QString::fromStdString(topic), QString::fromStdString(msg_type));
   }
 
   const std::string path_str = bag_path.toStdString();
@@ -45,7 +53,14 @@ void BagWorker::processBag(const QString& bag_path) {
   for (auto& fut : futures) {
     auto [topic, payloads] = fut.get();
     max_size = std::max(max_size, static_cast<int>(payloads.size()));
-    bag_cache[topic] = std::move(payloads);
+    for (int i = 0; i < payloads.size(); ++i) {
+        QString topic_name = QString::fromStdString(topic);
+        qint64 timestamp = 0;
+
+        QByteArray payload_data(reinterpret_cast<const char*>(payloads[i].data()), payloads[i].size());
+
+        emit payloadReady(topic_name, i, timestamp, payload_data);
+    }
   }
 
   if (max_size == 0) {
@@ -56,26 +71,22 @@ void BagWorker::processBag(const QString& bag_path) {
   emit finished();
 }
 
-void BagWorker::updateProgress(const int value) {
-  for (const auto& topic_item : bag_cache) {
-    if (value < bag_cache[topic_item.first].size()) {
-      const auto& payload = bag_cache[topic_item.first][value];
-      if (topic_item.first == "/livox/lidar") {
-        GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
-        emit cloudFrameReady(frame);
-      } else if (topic_item.first == "/cloud_registered") {
-        GeneralCloudFrame frame = parseSensorPc2Payload(payload.data(), payload.size());
-        emit cloudFrameReady(frame);
-      } else if (topic_item.first == "/usb_cam/image_raw/compressed") {
-        ImageFrame frame = parseImagePayload(payload.data(), payload.size());
-        emit imageFrameReady(frame);
-      } else if (topic_item.first == "/aft_mapped_to_init") {
-        OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
-        frame.index = value;
-        emit odomFrameReady(frame);
-      }
+void BagWorker::updateProgress(const QString& topic_name, const int percent, const QByteArray& payload_data) {
+    const uint8_t* payload = reinterpret_cast<const uint8_t*>(payload_data.constData());
+    if (topic_name == "/livox/lidar") {
+    GeneralCloudFrame frame = parseLivoxPayload(payload, payload_data.size());
+    emit cloudFrameReady(frame);
+    } else if (topic_name == "/cloud_registered") {
+    GeneralCloudFrame frame = parseSensorPc2Payload(payload, payload_data.size());
+    emit cloudFrameReady(frame);
+    } else if (topic_name == "/usb_cam/image_raw/compressed") {
+    ImageFrame frame = parseImagePayload(payload, payload_data.size());
+    emit imageFrameReady(frame);
+    } else if (topic_name == "/aft_mapped_to_init") {
+    OdomFrame frame = parseOdomPayload(payload, payload_data.size());
+    frame.index = percent;
+    emit odomFrameReady(frame);
     }
-  }
 }
 
 GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t length) {

@@ -65,6 +65,7 @@ public:
     void printInfo() const;
     void printAvailableTopics() const;
     std::vector<std::string> getAvailableTopics() const;
+    std::vector<std::string> getAvailableTypes() const;
     void saveDataOnTopic(const std::string &topic_name,
                          const std::string &output_path);
 
