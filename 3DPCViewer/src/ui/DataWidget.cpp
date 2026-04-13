@@ -1,24 +1,23 @@
 #include "ui/DataWidget.h"
 #include <QFileDialog>
 
-DataWidget::DataWidget(QWidget *parent)
-	: QWidget(parent)
-{
-	ui = std::make_unique<Ui::DataWidgetClass>();
-	ui->setupUi(this);
+DataWidget::DataWidget(QWidget* parent) : QWidget(parent) {
+  ui = std::make_unique<Ui::DataWidgetClass>();
+  ui->setupUi(this);
 
-	connect(ui->pB_import_bag, &QPushButton::clicked, this, [this]() {
-		QString fileName = QFileDialog::getOpenFileName(this, "Open File", ".",
-			"Open files(*.bag)");
+  connect(ui->pB_import_bag, &QPushButton::clicked, this, [this]() {
+    QString file_name = QFileDialog::getOpenFileName(this, "Open File", ".",
+        "Open files(*.bag)");
 
-		if (fileName.isEmpty()) return;
-		ui->lbl_filename->setText(fileName);
+    if (file_name.isEmpty()) return;
+    ui->lbl_filename->setText(file_name);
 
-		QFileInfo info(fileName);
-		ui->lbl_filesize->setText(QString::number(info.size() / 1024 / 1024));
-		emit requestProcBag(fileName);
-		});
+    QFileInfo info(file_name);
+    ui->lbl_filesize->setText(QString::number(info.size() / 1024 / 1024));
+    emit requestProcBag(file_name);
+  });
 }
 
 DataWidget::~DataWidget() = default;
+
 

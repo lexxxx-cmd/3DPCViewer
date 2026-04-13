@@ -1,35 +1,26 @@
 #include "Controller.h"
 
-Controller::Controller(QObject *parent)
-	: QObject(parent)
-{
-	m_viewer = std::make_unique<PCViewer>();
-	m_dataService = std::make_unique<DataService>();
+Controller::Controller(QObject* parent) : QObject(parent) {
+  viewer = std::make_unique<PCViewer>();
+  data_service = std::make_unique<DataService>();
 
-	setupConnections();
+  setup_connections();
 }
 
-Controller::~Controller()
-{
+Controller::~Controller() {
 }
 
-void Controller::run()
-{
-	m_viewer->show();
+void Controller::run() {
+  viewer->show();
 }
 
-void Controller::setupConnections()
-{
-    // UI到服务链接
-	connect(m_viewer.get(), &PCViewer::requestProcBag, m_dataService.get(), &DataService::startProcess);
-	connect(m_viewer.get(), &PCViewer::progressUpdated, m_dataService.get(), &DataService::updateProgress);
+void Controller::setup_connections() {
+  connect(viewer.get(), &PCViewer::requestProcBag, data_service.get(), &DataService::startProcess);
+  connect(viewer.get(), &PCViewer::progressUpdated, data_service.get(), &DataService::updateProgress);
 
-	// 服务到UI链接
-	connect(m_dataService.get(), &DataService::cloudFrameReady, m_viewer.get(), &PCViewer::cloudFrameReady);
-	connect(m_dataService.get(), &DataService::imageFrameReady, m_viewer.get(), &PCViewer::imageFrameReady);
-	connect(m_dataService.get(), &DataService::odomFrameReady, m_viewer.get(), &PCViewer::odomFrameReady);
-	connect(m_dataService.get(), &DataService::topicListReady, m_viewer.get(), &PCViewer::topicListReady);
-	connect(m_dataService.get(), &DataService::messageNumReady, m_viewer.get(), &PCViewer::messageNumReady);
-
-    
+  connect(data_service.get(), &DataService::cloudFrameReady, viewer.get(), &PCViewer::cloudFrameReady);
+  connect(data_service.get(), &DataService::imageFrameReady, viewer.get(), &PCViewer::imageFrameReady);
+  connect(data_service.get(), &DataService::odomFrameReady, viewer.get(), &PCViewer::odomFrameReady);
+  connect(data_service.get(), &DataService::topicListReady, viewer.get(), &PCViewer::topicListReady);
+  connect(data_service.get(), &DataService::messageNumReady, viewer.get(), &PCViewer::messageNumReady);
 }

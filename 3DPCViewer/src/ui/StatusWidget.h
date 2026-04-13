@@ -9,21 +9,19 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class StatusWidgetClass; };
 QT_END_NAMESPACE
 
-class StatusWidget : public QWidget
-{
-	Q_OBJECT
+class StatusWidget : public QWidget {
+  Q_OBJECT
 
-public:
-	StatusWidget(QWidget *parent = nullptr);
-	~StatusWidget();
+ public:
+  StatusWidget(QWidget* parent = nullptr);
+  ~StatusWidget();
 
+ public slots:
+  void onUpdateTopicList(const std::vector<std::string>& topics);
+  void onTopicStateChanged(QStandardItem* item);
 
-public slots:
-	void onUpdateTopicList(const std::vector<std::string>& topics);
-	void onTopicStateChanged(QStandardItem* item);
-
-private:
-	std::unique_ptr<Ui::StatusWidgetClass> ui;
-	QStandardItemModel* topicModel;
+ private:
+  std::unique_ptr<Ui::StatusWidgetClass> ui;
+  QStandardItemModel* topic_model;
 };
 

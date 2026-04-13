@@ -6,311 +6,322 @@
 #include <future>
 #include <numeric>
 
-BagWorker::BagWorker(QObject* parent) : QObject(parent), m_stopFlag(false) {}
+BagWorker::BagWorker(QObject* parent) : QObject(parent), stop_flag(false) {}
 
 void BagWorker::stopProcessing() {
-    m_stopFlag = true;
+  stop_flag = true;
 }
 
-void BagWorker::processBag(const QString& bagPath) {
-    m_stopFlag = false;
+void BagWorker::processBag(const QString& bag_path) {
+  stop_flag = false;
 
-    // Open bag once to retrieve the topic list (metadata only, very fast).
-    Rosbag bag(bagPath.toStdString());
-    std::vector<std::string> topicList = bag.getAvailableTopics();
+  Rosbag bag(bag_path.toStdString());
+  std::vector<std::string> topic_list = bag.getAvailableTopics();
 
-    emit topicListReady(topicList);
+  emit topicListReady(topic_list);
 
-    // Guard: if the cache already contains data from this bag, clear it first.
-    for (const std::string& topic : topicList) {
-        if (m_bagCache.find(topic) != m_bagCache.end()) {
-            // TODO
-            m_bagCache.clear();
-            return;
-        }
+  for (const std::string& topic : topic_list) {
+    if (bag_cache.find(topic) != bag_cache.end()) {
+      bag_cache.clear();
+      return;
     }
+  }
 
-    // Launch one async task per topic so their payload reads run in parallel.
-    // Each task opens its own Rosbag (and therefore its own file descriptor)
-    // to avoid contention on the shared ifstream.
-    const std::string pathStr = bagPath.toStdString();
-    using TopicPayloads = std::pair<std::string, std::vector<std::vector<uint8_t>>>;
-    std::vector<std::future<TopicPayloads>> futures;
-    futures.reserve(topicList.size());
+  const std::string path_str = bag_path.toStdString();
+  using TopicPayloads = std::pair<std::string, std::vector<std::vector<uint8_t>>>;
+  std::vector<std::future<TopicPayloads>> futures;
+  futures.reserve(topic_list.size());
 
-    for (const std::string& topic : topicList) {
-        futures.push_back(std::async(std::launch::async,
-            [pathStr, topic]() -> TopicPayloads {
-                qDebug() << "Bag 涓彲鐢� Topic:" << QString::fromStdString(topic);
-                Rosbag topicBag(pathStr);
-                return { topic, topicBag.getRawPayloads(topic) };
-            }));
-    }
+  for (const std::string& topic : topic_list) {
+    futures.push_back(std::async(std::launch::async,
+      [path_str, topic]() -> TopicPayloads {
+        qDebug() << "Available topic in bag:" << QString::fromStdString(topic);
+        Rosbag topic_bag(path_str);
+        return { topic, topic_bag.getRawPayloads(topic) };
+      }));
+  }
 
-    // Collect results and build the cache.
-    int max_size = 0;
-    for (auto& fut : futures) {
-        auto [topic, payloads] = fut.get();
-        max_size = std::max(max_size, static_cast<int>(payloads.size()));
-        m_bagCache[topic] = std::move(payloads);
-    }
+  int max_size = 0;
+  for (auto& fut : futures) {
+    auto [topic, payloads] = fut.get();
+    max_size = std::max(max_size, static_cast<int>(payloads.size()));
+    bag_cache[topic] = std::move(payloads);
+  }
 
-    // Verify that at least one message was read.
-    if (max_size == 0) {
-        emit finished();
-        return;
-    }
-    emit messageNumReady(max_size);
+  if (max_size == 0) {
     emit finished();
+    return;
+  }
+  emit messageNumReady(max_size);
+  emit finished();
 }
 
 void BagWorker::updateProgress(const int value) {
-    for (const auto& topicItem : m_bagCache) {
-        if (value < m_bagCache[topicItem.first].size()) {
-            const auto& payload = m_bagCache[topicItem.first][value];
-            if (topicItem.first == "/livox/lidar") {
-                GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/cloud_registered") {
-                GeneralCloudFrame frame = parseSensorPC2Payload(payload.data(), payload.size());
-                emit cloudFrameReady(frame);
-            }
-            else if (topicItem.first == "/usb_cam/image_raw/compressed") {
-                ImageFrame frame = parseImagePayload(payload.data(), payload.size());
-                emit imageFrameReady(frame);
-            }
-            else if (topicItem.first == "/aft_mapped_to_init") {
-                OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
-                frame.index = value;
-                emit odomFrameReady(frame);
-            }
-        }
+  for (const auto& topic_item : bag_cache) {
+    if (value < bag_cache[topic_item.first].size()) {
+      const auto& payload = bag_cache[topic_item.first][value];
+      if (topic_item.first == "/livox/lidar") {
+        GeneralCloudFrame frame = parseLivoxPayload(payload.data(), payload.size());
+        emit cloudFrameReady(frame);
+      } else if (topic_item.first == "/cloud_registered") {
+        GeneralCloudFrame frame = parseSensorPc2Payload(payload.data(), payload.size());
+        emit cloudFrameReady(frame);
+      } else if (topic_item.first == "/usb_cam/image_raw/compressed") {
+        ImageFrame frame = parseImagePayload(payload.data(), payload.size());
+        emit imageFrameReady(frame);
+      } else if (topic_item.first == "/aft_mapped_to_init") {
+        OdomFrame frame = parseOdomPayload(payload.data(), payload.size());
+        frame.index = value;
+        emit odomFrameReady(frame);
+      }
     }
+  }
 }
 
 GeneralCloudFrame BagWorker::parseLivoxPayload(const uint8_t* payload, size_t length) {
-    GeneralCloudFrame frame;
-    size_t offset = 0;
+  GeneralCloudFrame frame;
+  size_t offset = 0;
 
-    // std_msgs/Header
-    offset += 12; // seq(4) + stamp_sec(4) + stamp_nsec(4)
-    uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
-    frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
-    offset += frame_id_len;
+  offset += 12;
+  uint32_t frame_id_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+  offset += frame_id_len;
 
-    // Livox CustomMsg Header
-    frame.timestamp = *(uint64_t*)(payload + offset); offset += 8; // timebase
-    uint32_t point_num = *(uint32_t*)(payload + offset); offset += 4; // point_num
-    offset += 1; // lidar_id
-    offset += 3; // rsvd
+  frame.timestamp = *(uint64_t*)(payload + offset);
+  offset += 8;
+  uint32_t point_num = *(uint32_t*)(payload + offset);
+  offset += 4;
+  offset += 1;
+  offset += 3;
 
-    uint32_t array_elements = *(uint32_t*)(payload + offset); offset += 4;
+  uint32_t array_elements = *(uint32_t*)(payload + offset);
+  offset += 4;
 
-    frame.points.resize(point_num);
+  frame.points.resize(point_num);
 
-    // Capture offset by value so the parallel lambda reads a stable snapshot.
-    const size_t pointsOffset = offset;
+  const size_t points_offset = offset;
 
-    // Use an index range and parallel execution: each point conversion is independent.
-    std::vector<uint32_t> indices(point_num);
-    std::iota(indices.begin(), indices.end(), 0u);
-    std::for_each(std::execution::par_unseq,
-                  indices.begin(), indices.end(),
-                  [&frame, payload, pointsOffset](uint32_t i) {
-                      const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(
-                          payload + pointsOffset + i * sizeof(LivoxPoint));
-                      GeneralPointIRGB& pt = frame.points[i];
-                      pt.pointI.x            = src->x;
-                      pt.pointI.y            = src->y;
-                      pt.pointI.z            = src->z;
-                      pt.pointI.reflectivity = src->reflectivity;
-                      pt.r = JET_LUT[src->reflectivity].r;
-                      pt.g = JET_LUT[src->reflectivity].g;
-                      pt.b = JET_LUT[src->reflectivity].b;
-                  });
+  std::vector<uint32_t> indices(point_num);
+  std::iota(indices.begin(), indices.end(), 0u);
+  std::for_each(std::execution::par_unseq,
+                indices.begin(), indices.end(),
+                [&frame, payload, points_offset](uint32_t i) {
+                  const LivoxPoint* src = reinterpret_cast<const LivoxPoint*>(
+                      payload + points_offset + i * sizeof(LivoxPoint));
+                  GeneralPointIRGB& pt = frame.points[i];
+                  pt.point_i.x = src->x;
+                  pt.point_i.y = src->y;
+                  pt.point_i.z = src->z;
+                  pt.point_i.reflectivity = src->reflectivity;
+                  pt.r = kJetLut[src->reflectivity].r;
+                  pt.g = kJetLut[src->reflectivity].g;
+                  pt.b = kJetLut[src->reflectivity].b;
+                });
 
-    return frame;
+  return frame;
 }
 
-GeneralCloudFrame BagWorker::parseSensorPC2Payload(const uint8_t* payload, size_t length) {
-    GeneralCloudFrame frame;
-    size_t offset = 0;
+GeneralCloudFrame BagWorker::parseSensorPc2Payload(const uint8_t* payload, size_t length) {
+  GeneralCloudFrame frame;
+  size_t offset = 0;
 
-    // 解析Header
-    offset += 12; // seq(4) + stamp_sec(4) + stamp_nsec(4)
-    uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
-    frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
-    offset += frame_id_len;
+  offset += 12;
+  uint32_t frame_id_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  frame.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+  offset += frame_id_len;
 
-    // 解析height和width
-    uint32_t height = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t width = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t point_num = height * width;
+  uint32_t height = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t width = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t point_num = height * width;
 
-    // fields数组
-    uint32_t fields_size = *(uint32_t*)(payload + offset); offset += 4;
-    struct FieldInfo {
-        std::string name;
-        uint32_t offset;
-        uint8_t datatype;
-        uint32_t count;
-    };
-    std::vector<FieldInfo> fields;
-    for (uint32_t i = 0; i < fields_size; ++i) {
-        uint32_t name_len = *(uint32_t*)(payload + offset); offset += 4;
-        std::string name((const char*)(payload + offset), name_len);
-        offset += name_len;
-        uint32_t field_offset = *(uint32_t*)(payload + offset); offset += 4;
-        uint8_t datatype = *(uint8_t*)(payload + offset); offset += 1;
-        uint32_t count = *(uint32_t*)(payload + offset); offset += 4;
-        fields.push_back({ name, field_offset, datatype, count });
+  uint32_t fields_size = *(uint32_t*)(payload + offset);
+  offset += 4;
+  struct FieldInfo {
+    std::string name;
+    uint32_t offset;
+    uint8_t datatype;
+    uint32_t count;
+  };
+  std::vector<FieldInfo> fields;
+  for (uint32_t i = 0; i < fields_size; ++i) {
+    uint32_t name_len = *(uint32_t*)(payload + offset);
+    offset += 4;
+    std::string name((const char*)(payload + offset), name_len);
+    offset += name_len;
+    uint32_t field_offset = *(uint32_t*)(payload + offset);
+    offset += 4;
+    uint8_t datatype = *(uint8_t*)(payload + offset);
+    offset += 1;
+    uint32_t count = *(uint32_t*)(payload + offset);
+    offset += 4;
+    fields.push_back({ name, field_offset, datatype, count });
+  }
+
+  bool is_bigendian = *(uint8_t*)(payload + offset);
+  offset += 1;
+  uint32_t point_step = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t row_step = *(uint32_t*)(payload + offset);
+  offset += 4;
+
+  uint32_t data_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  const uint8_t* data_ptr = payload + offset;
+  offset += data_len;
+
+  bool is_dense = *(uint8_t*)(payload + offset);
+  offset += 1;
+
+  int x_idx = -1, y_idx = -1, z_idx = -1, rgb_idx = -1, reflectivity_idx = -1;
+  for (size_t i = 0; i < fields.size(); ++i) {
+    if (fields[i].name == "x") x_idx = i;
+    if (fields[i].name == "y") y_idx = i;
+    if (fields[i].name == "z") z_idx = i;
+    if (fields[i].name == "rgb" || fields[i].name == "rgba") rgb_idx = i;
+    if (fields[i].name == "intensity" || fields[i].name == "reflectivity") reflectivity_idx = i;
+  }
+
+  if (data_len < point_num * point_step) {
+    qWarning() << "PointCloud2 data_len is abnormal! Expected at least:" << point_num * point_step << "Actual:" << data_len;
+    point_num = data_len / point_step;
+  }
+
+  frame.points.resize(point_num);
+  for (uint32_t i = 0; i < point_num; ++i) {
+    size_t base = i * point_step;
+    GeneralPointI pt;
+
+    if (x_idx >= 0) pt.x = *(float*)(data_ptr + base + fields[x_idx].offset);
+    if (y_idx >= 0) pt.y = *(float*)(data_ptr + base + fields[y_idx].offset);
+    if (z_idx >= 0) pt.z = *(float*)(data_ptr + base + fields[z_idx].offset);
+
+    if (reflectivity_idx >= 0) {
+      uint8_t dtype = fields[reflectivity_idx].datatype;
+      if (dtype == 7) {
+        pt.reflectivity = (uint8_t)(*(float*)(data_ptr + base + fields[reflectivity_idx].offset));
+      } else if (dtype == 2) {
+        pt.reflectivity = *(uint8_t*)(data_ptr + base + fields[reflectivity_idx].offset);
+      } else {
+        pt.reflectivity = 0;
+      }
     }
+    frame.points[i].point_i = pt;
 
-    bool is_bigendian = *(uint8_t*)(payload + offset); offset += 1;
-    uint32_t point_step = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t row_step = *(uint32_t*)(payload + offset); offset += 4;
-
-    uint32_t data_len = *(uint32_t*)(payload + offset); offset += 4;
-    const uint8_t* data_ptr = payload + offset;
-    offset += data_len;
-
-    bool is_dense = *(uint8_t*)(payload + offset); offset += 1;
-
-    int x_idx = -1, y_idx = -1, z_idx = -1, rgb_idx = -1, reflectivity_idx = -1;
-    for (size_t i = 0; i < fields.size(); ++i) {
-        if (fields[i].name == "x") x_idx = i;
-        if (fields[i].name == "y") y_idx = i;
-        if (fields[i].name == "z") z_idx = i;
-        if (fields[i].name == "rgb" || fields[i].name == "rgba") rgb_idx = i;
-        if (fields[i].name == "intensity" || fields[i].name == "reflectivity") reflectivity_idx = i;
+    if (rgb_idx >= 0) {
+      uint32_t rgb = *(uint32_t*)(data_ptr + base + fields[rgb_idx].offset);
+      frame.points[i].r = (rgb >> 16) & 0xFF;
+      frame.points[i].g = (rgb >> 8) & 0xFF;
+      frame.points[i].b = rgb & 0xFF;
+    } else {
+      frame.points[i].r = pt.reflectivity;
+      frame.points[i].g = pt.reflectivity;
+      frame.points[i].b = pt.reflectivity;
     }
+  }
 
-    // 防止 data_len 不足导致的内存越界崩溃
-    if (data_len < point_num * point_step) {
-        qWarning() << "PointCloud2 data_len 异常! 预期至少:" << point_num * point_step << "实际:" << data_len;
-        point_num = data_len / point_step;
-    }
-
-    frame.points.resize(point_num);
-    for (uint32_t i = 0; i < point_num; ++i) {
-        size_t base = i * point_step;
-        GeneralPointI pt;
-
-        if (x_idx >= 0) pt.x = *(float*)(data_ptr + base + fields[x_idx].offset);
-        if (y_idx >= 0) pt.y = *(float*)(data_ptr + base + fields[y_idx].offset);
-        if (z_idx >= 0) pt.z = *(float*)(data_ptr + base + fields[z_idx].offset);
-
-        if (reflectivity_idx >= 0) {
-            uint8_t dtype = fields[reflectivity_idx].datatype;
-            if (dtype == 7) { // FLOAT32
-                pt.reflectivity = (uint8_t)(*(float*)(data_ptr + base + fields[reflectivity_idx].offset));
-            }
-            else if (dtype == 2) { // UINT8
-                pt.reflectivity = *(uint8_t*)(data_ptr + base + fields[reflectivity_idx].offset);
-            }
-            else {
-                pt.reflectivity = 0; // 默认值
-            }
-        }
-        frame.points[i].pointI = pt;
-
-        // 解析RGB
-        if (rgb_idx >= 0) {
-            uint32_t rgb = *(uint32_t*)(data_ptr + base + fields[rgb_idx].offset);
-            frame.points[i].r = (rgb >> 16) & 0xFF;
-            frame.points[i].g = (rgb >> 8) & 0xFF;
-            frame.points[i].b = rgb & 0xFF;
-        }
-        else {
-            frame.points[i].r = pt.reflectivity;
-            frame.points[i].g = pt.reflectivity;
-            frame.points[i].b = pt.reflectivity;
-        }
-    }
-
-    return frame;
+  return frame;
 }
-
 
 ImageFrame BagWorker::parseImagePayload(const uint8_t* payload, size_t length) {
-    ImageFrame frame;
-    size_t offset = 0;
+  ImageFrame frame;
+  size_t offset = 0;
 
-    // 1. 解析 Header
-    uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
-    frame.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
+  uint32_t seq = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t sec = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t nsec = *(uint32_t*)(payload + offset);
+  offset += 4;
+  frame.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
 
-    uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
-    offset += frame_id_len;
+  uint32_t frame_id_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  offset += frame_id_len;
 
-    uint32_t format_len = *(uint32_t*)(payload + offset); offset += 4;
-    QString format_str = QString::fromUtf8((const char*)(payload + offset), format_len);
-    offset += format_len;
+  uint32_t format_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  QString format_str = QString::fromUtf8((const char*)(payload + offset), format_len);
+  offset += format_len;
 
-    uint32_t data_len = *(uint32_t*)(payload + offset); offset += 4;
+  uint32_t data_len = *(uint32_t*)(payload + offset);
+  offset += 4;
 
-    // 越界保护
-    if (offset + data_len > length) {
-        qWarning() << "CompressedImage 数据包不完整，发生越界！";
-        return frame;
-    }
-
-    bool success = frame.image.loadFromData(payload + offset, data_len);
-    if (!success) {
-        qWarning() << "图像解码失败！ROS format 字段为:" << format_str;
-    }
-
+  if (offset + data_len > length) {
+    qWarning() << "CompressedImage data packet is incomplete, out of bounds!";
     return frame;
+  }
+
+  bool success = frame.image.loadFromData(payload + offset, data_len);
+  if (!success) {
+    qWarning() << "Image decoding failed! ROS format field:" << format_str;
+  }
+
+  return frame;
 }
 
 OdomFrame BagWorker::parseOdomPayload(const uint8_t* payload, size_t length) {
-    OdomFrame odom;
-    size_t offset = 0;
+  OdomFrame odom;
+  size_t offset = 0;
 
-    uint32_t seq = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t sec = *(uint32_t*)(payload + offset); offset += 4;
-    uint32_t nsec = *(uint32_t*)(payload + offset); offset += 4;
-    odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec; // 锟较筹拷锟斤拷锟诫级时锟斤拷锟�
+  uint32_t seq = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t sec = *(uint32_t*)(payload + offset);
+  offset += 4;
+  uint32_t nsec = *(uint32_t*)(payload + offset);
+  offset += 4;
+  odom.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
 
-    uint32_t frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
-    odom.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
-    offset += frame_id_len;
+  uint32_t frame_id_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  odom.frame_id = QString::fromUtf8((const char*)(payload + offset), frame_id_len);
+  offset += frame_id_len;
 
-    uint32_t child_frame_id_len = *(uint32_t*)(payload + offset); offset += 4;
-    odom.child_frame_id = QString::fromUtf8((const char*)(payload + offset), child_frame_id_len);
-    offset += child_frame_id_len;
+  uint32_t child_frame_id_len = *(uint32_t*)(payload + offset);
+  offset += 4;
+  odom.child_frame_id = QString::fromUtf8((const char*)(payload + offset), child_frame_id_len);
+  offset += child_frame_id_len;
 
-    odom.pose.x = *(double*)(payload + offset); offset += 8;
-    odom.pose.y = *(double*)(payload + offset); offset += 8;
-    odom.pose.z = *(double*)(payload + offset); offset += 8;
-    
-    odom.pose.qx = *(double*)(payload + offset); offset += 8;
-    odom.pose.qy = *(double*)(payload + offset); offset += 8;
-    odom.pose.qz = *(double*)(payload + offset); offset += 8;
-    odom.pose.qw = *(double*)(payload + offset); offset += 8;
+  odom.pose.x = *(double*)(payload + offset);
+  offset += 8;
+  odom.pose.y = *(double*)(payload + offset);
+  offset += 8;
+  odom.pose.z = *(double*)(payload + offset);
+  offset += 8;
+  
+  odom.pose.qx = *(double*)(payload + offset);
+  offset += 8;
+  odom.pose.qy = *(double*)(payload + offset);
+  offset += 8;
+  odom.pose.qz = *(double*)(payload + offset);
+  offset += 8;
+  odom.pose.qw = *(double*)(payload + offset);
+  offset += 8;
 
-    offset += (36 * 8);
+  offset += (36 * 8);
 
-    odom.twist.linear_x = *(double*)(payload + offset); offset += 8;
-    odom.twist.linear_y = *(double*)(payload + offset); offset += 8;
-    odom.twist.linear_z = *(double*)(payload + offset); offset += 8;
+  odom.twist.linear_x = *(double*)(payload + offset);
+  offset += 8;
+  odom.twist.linear_y = *(double*)(payload + offset);
+  offset += 8;
+  odom.twist.linear_z = *(double*)(payload + offset);
+  offset += 8;
 
+  odom.twist.angular_x = *(double*)(payload + offset);
+  offset += 8;
+  odom.twist.angular_y = *(double*)(payload + offset);
+  offset += 8;
+  odom.twist.angular_z = *(double*)(payload + offset);
+  offset += 8;
 
-    odom.twist.angular_x = *(double*)(payload + offset); offset += 8;
-    odom.twist.angular_y = *(double*)(payload + offset); offset += 8;
-    odom.twist.angular_z = *(double*)(payload + offset); offset += 8;
+  offset += (36 * 8);
 
-    // 锟斤拷锟斤拷 Twist 锟斤拷协锟斤拷锟斤拷锟斤拷锟� (36 * 8 锟街斤拷)
-    offset += (36 * 8);
+  if (offset > length) {
+    qWarning() << "Odometry data packet out of bounds, possible data corruption";
+  }
 
-    // 越锟斤拷锟斤拷
-    if (offset > length) {
-        qWarning() << "Odometry 锟斤拷锟捷斤拷锟斤拷越锟界，锟斤拷锟斤拷锟斤拷锟捷帮拷锟斤拷锟斤拷锟斤拷锟斤拷";
-    }
-
-
-    return odom;
+  return odom;
 }

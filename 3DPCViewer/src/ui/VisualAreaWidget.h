@@ -1,17 +1,17 @@
-#ifndef VISUALAREAWIDGET_H
-#define VISUALAREAWIDGET_H
+#pragma once
 
 #include <QWidget>
-#include "osgQOpenGL/osgQOpenGLWidget.h"
+#include <QColor>
+#include <QFutureWatcher>
 #include <osgViewer/Viewer>
 #include <osgGA/TrackballManipulator>
 #include <osg/Group>
 #include <osg/Geometry>
 #include <osg/Geode>
 #include <osg/Point>
-#include <QFutureWatcher>
-
 #include <pcl/PCLPointCloud2.h>
+
+#include "osgQOpenGL/osgQOpenGLWidget.h"
 #include "io/BagDataTypes.h"
 #include "node/OdomCameraVisualizer.h"
 #include "node/OdomPathVisualizer.h"
@@ -22,42 +22,38 @@
 namespace Ui { class VisualAreaWidgetClass; }
 
 class VisualAreaWidget : public QWidget {
-    Q_OBJECT
-public:
-    VisualAreaWidget(QWidget* parent = nullptr);
-    ~VisualAreaWidget();
+  Q_OBJECT
 
-public slots:
-    void onChangeSizeRequested(const int& size);
-    void onChangeOpacityRequested(const int& opacity);
-    void onChangeBgColorRequested(const QColor& color);
+ public:
+  VisualAreaWidget(QWidget* parent = nullptr);
+  ~VisualAreaWidget();
 
-    void onCloudFrameReady(const GeneralCloudFrame& frame);
-    void onOdomFrameReady(const OdomFrame& frame);
+ public slots:
+  void onChangeSizeRequested(const int& size);
+  void onChangeOpacityRequested(const int& opacity);
+  void onChangeBgColorRequested(const QColor& color);
 
-signals:
+  void onCloudFrameReady(const GeneralCloudFrame& frame);
+  void onOdomFrameReady(const OdomFrame& frame);
 
-private:
-    void initOSG();
-    void updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, bool isFirstLoad);
+ signals:
 
-    Ui::VisualAreaWidgetClass* ui;
-    osgQOpenGLWidget* m_osgWidget;
+ private:
+  void initOsg();
+  void updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, bool is_first_load);
 
-    osg::ref_ptr<osg::Group> m_root;
-    osg::ref_ptr<osg::Geode> m_cloudGeode;
-    osg::ref_ptr<osg::Geometry> m_cloudGeom;
+  Ui::VisualAreaWidgetClass* ui;
+  osgQOpenGLWidget* osg_widget;
 
-    pcl::PCLPointCloud2::Ptr m_currentCloud;
+  osg::ref_ptr<osg::Group> root;
+  osg::ref_ptr<osg::Geode> cloud_geode;
+  osg::ref_ptr<osg::Geometry> cloud_geom;
 
-    
-    std::unique_ptr<OdomCameraVisualizer> _camViz;
-    std::unique_ptr<OdomPathVisualizer> _pathViz;
-    std::unique_ptr<LivoxCloudVisualizer> _livoxViz;
-    std::unique_ptr<Grid> _gridViz;
-    // »º´æµ±Ç°×´Ì¬£¬±ãÓÚÔÚÌæ»» Geometry Ê±»Ö¸´
-    bool m_showNormals = false;
+  pcl::PCLPointCloud2::Ptr current_cloud;
 
+  std::unique_ptr<OdomCameraVisualizer> cam_viz;
+  std::unique_ptr<OdomPathVisualizer> path_viz;
+  std::unique_ptr<LivoxCloudVisualizer> livox_viz;
+  std::unique_ptr<Grid> grid_viz;
+  bool show_normals = false;
 };
-
-#endif

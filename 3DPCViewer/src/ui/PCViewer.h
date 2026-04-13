@@ -10,44 +10,39 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class PCViewerClass; };
 QT_END_NAMESPACE
 
-class PCViewer : public QMainWindow
-{
-    Q_OBJECT
+class PCViewer : public QMainWindow {
+  Q_OBJECT
 
-public:
-    PCViewer(QWidget *parent = nullptr);
-    ~PCViewer();
+ public:
+  PCViewer(QWidget* parent = nullptr);
+  ~PCViewer();
 
-    ControlPanelWidget* getControlPanel() const { return ui->ControlWidget; }
-    VisualAreaWidget* getVisualPanel() const { return ui->ShowWidget; }
+  ControlPanelWidget* getControlPanel() const { return ui->ControlWidget; }
+  VisualAreaWidget* getVisualPanel() const { return ui->ShowWidget; }
 
-public slots:
+ public slots:
 
-signals:
-	// control面板
-	void requestLoadFile(const QString& path);
-	void requestProcBag(const QString& path);
-	void requestUpdateFileSize(const int& size);
-	void requestUpdateFPS(const int& fps); 
-	void requestShowNormals(const bool& show);
+ signals:
+  void requestLoadFile(const QString& path);
+  void requestProcBag(const QString& path);
+  void requestUpdateFileSize(const int& size);
+  void requestUpdateFps(const int& fps);
+  void requestShowNormals(const bool& show);
 
-	void pointSizeChanged(const int& value);
-	void pointOpacityChanged(const int& value);
+  void pointSizeChanged(const int& value);
+  void pointOpacityChanged(const int& value);
 
-	// 转发service面板数据
-	void cloudFrameReady(const GeneralCloudFrame& frame);
-	void imageFrameReady(const ImageFrame& frame);
-	void odomFrameReady(const OdomFrame& frame);
-	void topicListReady(const std::vector<std::string>& topics);
-	void messageNumReady(int num);
+  void cloudFrameReady(const GeneralCloudFrame& frame);
+  void imageFrameReady(const ImageFrame& frame);
+  void odomFrameReady(const OdomFrame& frame);
+  void topicListReady(const std::vector<std::string>& topics);
+  void messageNumReady(int num);
 
-	void progressUpdated(const int value);
+  void progressUpdated(const int value);
 
-	// 错误
-	void errorOccur(const QString& errorMsg);
+  void errorOccur(const QString& error_msg);
 
-private:
-    std::unique_ptr<Ui::PCViewerClass> ui;
-
+ private:
+  std::unique_ptr<Ui::PCViewerClass> ui;
 };
 
