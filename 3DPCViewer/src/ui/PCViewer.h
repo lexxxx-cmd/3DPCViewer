@@ -24,7 +24,7 @@ class PCViewer : public QMainWindow {
 
  signals:
   void requestLoadFile(const QString& path);
-  void requestProcBag(const QString& path);
+  void requestProcessBag(const QString& path);
   void requestUpdateFileSize(const int& size);
   void requestUpdateFps(const int& fps);
   void requestShowNormals(const bool& show);
@@ -40,7 +40,7 @@ class PCViewer : public QMainWindow {
 
   void progressUpdated(const int value);
 
-  void errorOccur(const QString& error_msg);
+  void errorOccurred(const QString& error_msg);
 
  private:
   std::unique_ptr<Ui::PCViewerClass> ui;

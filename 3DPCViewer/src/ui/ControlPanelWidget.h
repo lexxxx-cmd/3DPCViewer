@@ -29,7 +29,7 @@ class ControlPanelWidget : public QWidget {
 
  signals:
   void requestLoadFile(const QString& path);
-  void requestProcBag(const QString& path);
+  void requestProcessBag(const QString& path);
   void requestUpdateFileSize(const int& size);
   void requestUpdatePointSize(const int& num);
   void requestUpdateFps(const int& fps);
@@ -42,7 +42,7 @@ class ControlPanelWidget : public QWidget {
   void topicListReady(const std::vector<std::string>& topics);
   void messageNumReady(int num);
   void progressUpdated(const int value);
-  void onImageFrameReady(const ImageFrame& frame);
+  void imageFrameReady(const ImageFrame& frame);
 
  private:
   std::unique_ptr<Ui::ControlPanelWidgetClass> ui;

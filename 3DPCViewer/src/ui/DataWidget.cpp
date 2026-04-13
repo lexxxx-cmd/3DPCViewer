@@ -14,7 +14,7 @@ DataWidget::DataWidget(QWidget* parent) : QWidget(parent) {
 
     QFileInfo info(file_name);
     ui->lbl_filesize->setText(QString::number(info.size() / 1024 / 1024));
-    emit requestProcBag(file_name);
+    emit requestProcessBag(file_name);
   });
 }
 

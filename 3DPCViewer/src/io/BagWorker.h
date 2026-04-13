@@ -25,7 +25,7 @@ class BagWorker : public QObject {
   void progressUpdated(int percent);
   void topicListReady(const std::vector<std::string>& topics);
   void messageNumReady(int num);
-  void errorOccur(const QString& error_msg);
+  void errorOccurred(const QString& error_msg);
   void finished();
   
   void topicInfoReady(const QString& bag_uuid, const QString& topic_name, 
