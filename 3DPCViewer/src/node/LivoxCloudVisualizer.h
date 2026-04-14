@@ -6,6 +6,8 @@
 #include <osg/Point>
 #include <osg/BlendFunc>
 #include <osg/BlendColor>
+#include <osg/Program>
+#include <osg/Shader>
 
 class LivoxCloudVisualizer {
  public:
@@ -100,12 +102,47 @@ class LivoxCloudVisualizer {
     }
   }
 
+  void clear() {
+    if (cloud_geode_) {
+      osg::Geometry* geom = dynamic_cast<osg::Geometry*>(cloud_geode_->getDrawable(0));
+      if (!geom) return;
+
+      osg::Vec3Array* vertices = dynamic_cast<osg::Vec3Array*>(geom->getVertexArray());
+      osg::Vec4Array* colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
+
+      if (vertices) {
+        vertices->clear();
+        vertices->dirty();
+      }
+      if (colors) {
+        colors->clear();
+        colors->dirty();
+      }
+
+      osg::DrawArrays* da = dynamic_cast<osg::DrawArrays*>(geom->getPrimitiveSet(0));
+      if (da) {
+        da->setCount(0);
+        da->dirty();
+      }
+
+      geom->dirtyDisplayList();
+      geom->dirtyBound();
+    }
+  }
+
  private:
   void applyRenderState(osg::Geometry* geom) {
     if (!geom) return;
     osg::StateSet* state = geom->getOrCreateStateSet();
 
     state->setAttributeAndModes(new osg::Point(current_point_size_), osg::StateAttribute::ON);
+
+    if (!shader_program_) {
+      shader_program_ = new osg::Program;
+      shader_program_->addShader(new osg::Shader(osg::Shader::VERTEX, kVertSource));
+      shader_program_->addShader(new osg::Shader(osg::Shader::FRAGMENT, kFragSource));
+    }
+    state->setAttributeAndModes(shader_program_, osg::StateAttribute::ON);
 
     float alpha = static_cast<float>(current_opacity_) / 100.0f;
     if (alpha < 1.0f) {
@@ -123,7 +160,29 @@ class LivoxCloudVisualizer {
 
   osg::Geode* cloud_geode_;
   osg::ref_ptr<osg::Point> point_attribute_;
+  osg::ref_ptr<osg::Program> shader_program_;
 
   int current_point_size_ = 2;
   int current_opacity_ = 100;
+
+  const char* kVertSource = R"(
+    #version 330 core
+    in vec4 osg_Vertex;
+    in vec4 osg_Color;
+    uniform mat4 osg_ModelViewProjectionMatrix;
+    out vec4 vColor;
+    void main() {
+      vColor = osg_Color;
+      gl_Position = osg_ModelViewProjectionMatrix * osg_Vertex;
+    }
+  )";
+
+  const char* kFragSource = R"(
+    #version 330 core
+    in vec4 vColor;
+    out vec4 fragColor;
+    void main() {
+      fragColor = vColor;
+    }
+  )";
 };

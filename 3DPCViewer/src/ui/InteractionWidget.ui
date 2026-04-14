@@ -125,33 +125,6 @@
     <widget class="ImagePanelWidget" name="widget_8" native="true"/>
    </item>
    <item>
-    <widget class="QWidget" name="widget_3" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout_3">
-      <item>
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>颜色模式：</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QComboBox" name="comboBox">
-        <item>
-         <property name="text">
-          <string>强度映射</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>颜色映射</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
     <widget class="QWidget" name="widget_5" native="true">
      <layout class="QGridLayout" name="gridLayout">
       <item row="0" column="0">

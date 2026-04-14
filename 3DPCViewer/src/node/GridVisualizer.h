@@ -39,10 +39,7 @@ class Grid {
     ss->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
     ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
-    // 关键修正：将渲染队列改为透明物体队列
     ss->setRenderBinDetails(10, "DepthSortedBin");
-
-    // 取消深度写入（网格作为背景通常不应遮挡其他物体）
     osg::ref_ptr<osg::Depth> depth = new osg::Depth;
     depth->setWriteMask(false);
     ss->setAttributeAndModes(depth, osg::StateAttribute::ON);

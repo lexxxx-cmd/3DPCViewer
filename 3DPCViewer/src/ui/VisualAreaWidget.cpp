@@ -36,7 +36,7 @@ void VisualAreaWidget::initOsg() {
 
   viewer->setSceneData(root);
   viewer->setCameraManipulator(new osgGA::TrackballManipulator);
-  viewer->getCamera()->setClearColor(osg::Vec4(0.5, 0.7, 1.0, 1.0));
+  viewer->getCamera()->setClearColor(osg::Vec4(0.1, 0.01, 0.03, 1.0));
 }
 
 void VisualAreaWidget::updateCloudGeometry(osg::ref_ptr<osg::Geometry> geom, bool is_first_load) {
@@ -74,6 +74,27 @@ void VisualAreaWidget::onChangeOpacityRequested(const int& opacity) {
 void VisualAreaWidget::onChangeBgColorRequested(const QColor& color) {
   osg_widget->getOsgViewer()->getCamera()->setClearColor(osg::Vec4(color.redF(), color.greenF(), color.blueF(), 1.0f));
   osg_widget->update();
+}
+
+void VisualAreaWidget::clear() {
+  if (cam_viz) cam_viz->clear();
+  if (path_viz) path_viz->clear();
+  if (livox_viz) livox_viz->clear();
+
+  if (cloud_geode.valid() && root.valid()) {
+    root->removeChild(cloud_geode);
+  }
+
+  cloud_geode = nullptr;
+  cloud_geom = nullptr;
+
+  if (current_cloud) {
+    current_cloud.reset();
+  }
+
+  if (osg_widget) {
+    osg_widget->update();
+  }
 }
 
 VisualAreaWidget::~VisualAreaWidget() {

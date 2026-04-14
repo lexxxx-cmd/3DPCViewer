@@ -43,18 +43,10 @@ cd ..
 
 ```bash
 # 安装OpenSceneGraph
-vcpkg install osg osg-qt
+vcpkg install osg
 # 安装Qt5
 # 安装PCL
 ```
-
-### 3. 克隆项目
-
-```bash
-git clone <项目仓库地址> 3DPCViewer
-cd 3DPCViewer
-```
-
 ## 构建步骤
 
 ### 1. 配置CMake

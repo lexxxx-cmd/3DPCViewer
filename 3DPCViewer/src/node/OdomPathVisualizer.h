@@ -4,6 +4,8 @@
 #include <osg/Geode>
 #include <osg/Point>
 #include <osg/LineWidth>
+#include <osg/Program>
+#include <osg/Shader>
 
 class OdomPathVisualizer {
  public:
@@ -61,6 +63,25 @@ class OdomPathVisualizer {
     }
 
     geom->dirtyBound();
+  }
+
+  void clear() {
+    if (vertices_) {
+      vertices_->clear();
+      vertices_->dirty();
+    }
+    max_odom_num_ = 0;
+    if (path_geode_) {
+      osg::Geometry* geom = dynamic_cast<osg::Geometry*>(path_geode_->getDrawable(0));
+      if (geom) {
+        osg::DrawArrays* da = dynamic_cast<osg::DrawArrays*>(geom->getPrimitiveSet(0));
+        if (da) {
+          da->setCount(0);
+          da->dirty();
+        }
+        geom->dirtyBound();
+      }
+    }
   }
 
  private:

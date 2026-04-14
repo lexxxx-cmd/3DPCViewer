@@ -7,6 +7,8 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
  
   connect(ui->ControlWidget, &ControlPanelWidget::requestProcessBag, this,
           &PCViewer::requestProcessBag);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestProcessBag, ui->ShowWidget,
+          [this]() { ui->ShowWidget->clear(); });
   connect(ui->ControlWidget, &ControlPanelWidget::progressUpdated, this,
           &PCViewer::progressUpdated);
 

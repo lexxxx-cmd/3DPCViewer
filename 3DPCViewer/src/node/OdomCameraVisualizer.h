@@ -62,10 +62,18 @@ class OdomCameraVisualizer {
                   double qx, double qy, double qz, double qw) {
     if (!pose_transform_) return;
 
+    pose_transform_->setNodeMask(0xffffffff);
     pose_transform_->setPosition(osg::Vec3d(x, y, z));
 
     osg::Quat quat(qx, qy, qz, qw);
     pose_transform_->setAttitude(quat);
+  }
+
+  void clear() {
+    if (pose_transform_) {
+      pose_transform_->setNodeMask(0);
+      pose_transform_->setPosition(osg::Vec3d(0, 0, 0));
+    }
   }
 
  private:

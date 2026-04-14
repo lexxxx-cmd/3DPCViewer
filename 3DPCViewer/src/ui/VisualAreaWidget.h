@@ -36,6 +36,8 @@ class VisualAreaWidget : public QWidget {
   void onCloudFrameReady(const GeneralCloudFrame& frame);
   void onOdomFrameReady(const OdomFrame& frame);
 
+  void clear();
+
  signals:
 
  private:
