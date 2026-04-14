@@ -4,14 +4,12 @@
 PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
   ui = std::make_unique<Ui::PCViewerClass>();
   ui->setupUi(this);
-
-  // Input & Event Connections
+ 
   connect(ui->ControlWidget, &ControlPanelWidget::requestProcessBag, this,
           &PCViewer::requestProcessBag);
   connect(ui->ControlWidget, &ControlPanelWidget::progressUpdated, this,
           &PCViewer::progressUpdated);
 
-  // Data Updates -> Child Widgets
   connect(this, &PCViewer::requestUpdateFileSize, ui->ControlWidget,
           &ControlPanelWidget::onFileSizeUpdated);
   connect(this, &PCViewer::topicListReady, ui->ControlWidget,
@@ -19,7 +17,6 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
   connect(this, &PCViewer::messageNumReady, ui->ControlWidget,
           &ControlPanelWidget::messageNumReady);
 
-  // Render Connections
   connect(this, &PCViewer::cloudFrameReady, ui->ShowWidget,
           &VisualAreaWidget::onCloudFrameReady);
   connect(this, &PCViewer::imageFrameReady, ui->ControlWidget,

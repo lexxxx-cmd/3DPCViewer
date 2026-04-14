@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QObject>
-#include <QThread>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QString>
@@ -32,7 +31,6 @@ signals:
     void errorOccurred(const QString& error_msg);
 
 private:
-    QThread* worker_thread;
     QSqlDatabase db;
     QString db_path;
     QString current_bag_uuid;

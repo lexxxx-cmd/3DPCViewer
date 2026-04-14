@@ -25,6 +25,10 @@ void VisualAreaWidget::initOsg() {
   root = new osg::Group();
   osgViewer::Viewer* viewer = osg_widget->getOsgViewer();
 
+  osg::State* state = viewer->getCamera()->getGraphicsContext()->getState();
+  state->setUseModelViewAndProjectionUniforms(true);
+  state->setUseVertexAttributeAliasing(true);
+
   root->addChild(cam_viz->getRootNode());
   root->addChild(path_viz->getNode());
   root->addChild(grid_viz->getGridNode());

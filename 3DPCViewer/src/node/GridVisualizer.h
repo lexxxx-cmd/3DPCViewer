@@ -20,11 +20,14 @@ class Grid {
     float s = size;
     vertices->push_back(osg::Vec3(-s, -s, 0.0f));
     vertices->push_back(osg::Vec3(s, -s, 0.0f));
+    vertices->push_back(osg::Vec3(-s, s, 0.0f));
+
+    vertices->push_back(osg::Vec3(s, -s, 0.0f));
     vertices->push_back(osg::Vec3(s, s, 0.0f));
     vertices->push_back(osg::Vec3(-s, s, 0.0f));
 
     quad->setVertexArray(vertices);
-    quad->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::QUADS, 0, 4));
+    quad->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLES, 0, 6));
 
     osg::ref_ptr<osg::Program> program = new osg::Program;
     program->addShader(new osg::Shader(osg::Shader::VERTEX, kVertSource));
@@ -36,7 +39,15 @@ class Grid {
     ss->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
     ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
-    ss->setRenderBinDetails(-1, "RenderBin");
+    // 关键修正：将渲染队列改为透明物体队列
+    ss->setRenderBinDetails(10, "DepthSortedBin");
+
+    // 取消深度写入（网格作为背景通常不应遮挡其他物体）
+    osg::ref_ptr<osg::Depth> depth = new osg::Depth;
+    depth->setWriteMask(false);
+    ss->setAttributeAndModes(depth, osg::StateAttribute::ON);
+
+    ss->addUniform(new osg::Uniform("gridSpacing", 1.0f));
 
     ss->addUniform(new osg::Uniform("gridSpacing", 1.0f));
     ss->addUniform(new osg::Uniform("lineWidth", 1.0f));

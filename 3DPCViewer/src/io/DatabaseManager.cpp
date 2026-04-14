@@ -5,19 +5,15 @@
 #include <QFileInfo>
 
 DatabaseManager::DatabaseManager(QObject* parent) : QObject(parent) {
-    worker_thread = new QThread(this);
-    this->moveToThread(worker_thread);
-    
-    connect(worker_thread, &QThread::finished, this, &QObject::deleteLater);
-    worker_thread->start();
+    // Thread management is handled by DataService
+    // Do not create own thread here to avoid double thread movement
 }
 
 DatabaseManager::~DatabaseManager() {
     if (db.isOpen()) {
         db.close();
     }
-    worker_thread->quit();
-    worker_thread->wait();
+    // Thread lifecycle is managed by DataService
 }
 
 void DatabaseManager::initialize(const QString& bag_path) {

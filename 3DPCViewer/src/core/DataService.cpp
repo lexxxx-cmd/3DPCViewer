@@ -38,6 +38,7 @@ DataService::DataService(QObject* parent) : QObject(parent) {
     emit requestStoreMessage(current_bag_uuid, topic_name, msg_index, timestamp, payload);
   });
 
+  // Connect internal signals to worker slots (replacing invokeMethod)
   connect(this, &DataService::requestInitializeDb, db_manager,
           &DatabaseManager::initialize, Qt::QueuedConnection);
   connect(this, &DataService::requestInsertTopic, db_manager,

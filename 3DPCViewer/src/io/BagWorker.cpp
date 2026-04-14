@@ -223,14 +223,14 @@ GeneralCloudFrame BagWorker::parseSensorPc2Payload(const uint8_t* payload, size_
     frame.points[i].point_i = pt;
 
     if (rgb_idx >= 0) {
-      uint32_t rgb = *(uint32_t*)(data_ptr + base + fields[rgb_idx].offset);
-      frame.points[i].r = (rgb >> 16) & 0xFF;
-      frame.points[i].g = (rgb >> 8) & 0xFF;
-      frame.points[i].b = rgb & 0xFF;
+      const uint8_t* color_ptr = data_ptr + base + fields[rgb_idx].offset;
+      frame.points[i].b = color_ptr[0];
+      frame.points[i].g = color_ptr[1];
+      frame.points[i].r = color_ptr[2];
     } else {
-      frame.points[i].r = pt.reflectivity;
-      frame.points[i].g = pt.reflectivity;
-      frame.points[i].b = pt.reflectivity;
+      frame.points[i].r = kJetLut[pt.reflectivity].r;
+      frame.points[i].g = kJetLut[pt.reflectivity].g;
+      frame.points[i].b = kJetLut[pt.reflectivity].b;
     }
   }
 
