@@ -22,9 +22,11 @@ find_package(Qt${QT_VERSION_MAJOR}
 )
 find_package(PCL REQUIRED)
 find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil)
+find_package(cppzmq CONFIG REQUIRED)
 
 add_subdirectory(third_party/ros1bag_reader)
 add_subdirectory(src)
+add_subdirectory(examples/mock_slam)
 
 if(WIN32)
     target_sources(3DPCViewer PRIVATE resources/3DPCViewer.rc)
