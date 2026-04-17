@@ -4,4 +4,6 @@ target_sources(3DPCViewer PRIVATE
 	SLAMNode.cpp
 	SlamNetWorker.h
 	SlamNetWorker.cpp
+	SLAMNodeManager.h
+	SLAMNodeManager.cpp
 )
