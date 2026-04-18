@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <memory>
 #include <QColor>
+#include "io/BagDataTypes.h"
 #include "ui_ControlPanelWidget.h"
 #include "ui/DataWidget.h"
 #include "ui/StatusWidget.h"
@@ -31,7 +32,7 @@ class ControlPanelWidget : public QWidget {
   void requestProcessBag(const QString& path);
   void requestUpdateFileSize(const int& size);
   void requestUpdatePointSize(const int& num);
-  void topicListReady(const std::vector<std::string>& topics);
+  void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
   void imageFrameReady(const ImageFrame& frame);
   void progressUpdated(int percent);

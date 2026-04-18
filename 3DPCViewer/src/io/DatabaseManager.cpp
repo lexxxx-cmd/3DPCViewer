@@ -31,10 +31,11 @@ void DatabaseManager::initialize(const QString& bag_path) {
         
         optimizeDatabase();
         createMetaTables();
-        
-        current_bag_uuid = insertBag(bag_path);
-        
-        emit initialized(current_bag_uuid);
+
+        current_bag_path = bag_path;
+
+        // current_bag_uuid will be set in insertTopicWithOrigin
+        emit initialized("");
     } catch (const std::exception& e) {
         emit errorOccurred(QString::fromStdString(e.what()));
     }
@@ -125,6 +126,17 @@ void DatabaseManager::insertTopic(const QString& bag_uuid, const QString& topic_
 void DatabaseManager::insertTopicWithOrigin(const QString& bag_uuid, const QString& origin_name, 
                                              const QString& topic_name, const QString& msg_type) {
     current_bag_uuid = bag_uuid;
+
+    QSqlQuery check_bag(db);
+    check_bag.prepare("SELECT 1 FROM bags WHERE bag_uuid = ?");
+    check_bag.addBindValue(bag_uuid);
+    if (check_bag.exec() && !check_bag.next()) {
+        QSqlQuery insert_bag(db);
+        insert_bag.prepare("INSERT OR REPLACE INTO bags (bag_uuid, file_path) VALUES (?, ?)");
+        insert_bag.addBindValue(bag_uuid);
+        insert_bag.addBindValue(current_bag_path);
+        insert_bag.exec();
+    }
 
     QString table_name = QString("data_o_%1_b_%2_t_%3")
                             .arg(QString::number(qHash(origin_name), 16).mid(0, 4))
@@ -245,6 +257,34 @@ void DatabaseManager::updateProgress(const int percent) {
                 emit payloadReady(topic_name, percent, payload_query.value(0).toByteArray());
             }
         }
+    } catch (const std::exception& e) {
+        emit errorOccurred(QString::fromStdString(e.what()));
+    }
+}
+
+void DatabaseManager::fetchTopicList() {
+    try {
+        QSqlQuery query(db);
+        query.prepare("SELECT b.file_path, o.origin_name, o.topic_name "
+                      "FROM origin o "
+                      "JOIN bags b ON o.bag_uuid = b.bag_uuid "
+                      "ORDER BY b.file_path, o.origin_name");
+
+        if (!query.exec()) {
+            throw std::runtime_error("Failed to fetch topics: " + query.lastError().text().toStdString());
+        }
+
+        TopicTreeData all_topics;
+        while (query.next()) {
+            QString file_path = query.value(0).toString();
+            QString bag_name = QFileInfo(file_path).fileName();
+            QString origin_name = query.value(1).toString();
+            QString topic_name = query.value(2).toString();
+
+            all_topics[bag_name][origin_name].append(topic_name);
+        }
+
+        emit topicListReady(all_topics);
     } catch (const std::exception& e) {
         emit errorOccurred(QString::fromStdString(e.what()));
     }

@@ -5,7 +5,10 @@
 #include <QSqlQuery>
 #include <QString>
 #include <QByteArray>
-#include <unordered_map>
+#include <QVariantList>
+#include <QMap>
+#include <QStringList>
+#include "BagDataTypes.h"
 
 class DatabaseManager : public QObject {
     Q_OBJECT
@@ -30,18 +33,21 @@ public slots:
                                     const QVariantList& timestamps, const QVariantList& payloads);
     void setCurrentOrigin(const QString& origin_name);
     void updateProgress(const int percent);
+    void fetchTopicList();
     void close();
 
 signals:
     void initialized(const QString& bag_uuid);
     void messageStored(const QString& topic_name, int msg_index);
     void payloadReady(const QString& topic_name, const int percent, const QByteArray payload);
+    void topicListReady(const TopicTreeData& topics);
     void errorOccurred(const QString& error_msg);
 
 private:
     QSqlDatabase db;
     QString db_path;
     QString current_bag_uuid;
+    QString current_bag_path;
     QString current_origin_name = "raw";
     std::unordered_map<std::string, QString> topic_table_map;
 

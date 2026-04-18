@@ -23,7 +23,6 @@ class BagWorker : public QObject {
   void imageFrameReady(const ImageFrame& frame);
   void odomFrameReady(const OdomFrame& frame);
   void progressUpdated(int percent);
-  void topicListReady(const std::vector<std::string>& topics);
   void messageNumReady(int num);
   void errorOccurred(const QString& error_msg);
   void finished();

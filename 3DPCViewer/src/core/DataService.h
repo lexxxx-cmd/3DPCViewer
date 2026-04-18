@@ -26,13 +26,14 @@ class DataService : public QObject {
   void imageFrameReady(const ImageFrame& frame);
   void odomFrameReady(const OdomFrame& frame);
   void progressUpdated(int percent);
-  void topicListReady(const std::vector<std::string>& topics);
+  void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
   void errorOccurred(const QString& error_msg);
   void finished();
 
   // Internal signals for cross-thread communication (replacing invokeMethod)
   void requestInitializeDb(const QString& bag_path);
+  void requestFetchTopicList();
   void requestInsertTopic(const QString& bag_uuid, const QString& topic_name,
                           const QString& msg_type);
   void requestStoreMessage(const QString& bag_uuid, const QString& topic_name,

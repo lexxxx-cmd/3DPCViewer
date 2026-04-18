@@ -24,8 +24,6 @@ void BagWorker::processBag(const QString& bag_path) {
   std::vector<std::string> topic_list = bag.getAvailableTopics();
   std::vector<std::string> type_list = bag.getAvailableTypes();
 
-  emit topicListReady(topic_list);
-  
   QString bag_uuid = generateUUID();
 
   for (int i = 0; i < topic_list.size(); i++) {

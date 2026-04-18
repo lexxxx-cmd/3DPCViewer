@@ -2,6 +2,7 @@
 
 #include <QtWidgets/QMainWindow>
 #include <memory>
+#include "io/BagDataTypes.h"
 #include "ui_PCViewer.h"
 #include "ui/ControlPanelWidget.h"
 #include "ui/VisualAreaWidget.h"
@@ -35,7 +36,7 @@ class PCViewer : public QMainWindow {
   void cloudFrameReady(const GeneralCloudFrame& frame);
   void imageFrameReady(const ImageFrame& frame);
   void odomFrameReady(const OdomFrame& frame);
-  void topicListReady(const std::vector<std::string>& topics);
+  void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
 
   void progressUpdated(const int value);

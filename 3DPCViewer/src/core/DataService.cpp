@@ -1,6 +1,9 @@
 #include "DataService.h"
+#include <QMetaType>
 
 DataService::DataService(QObject* parent) : QObject(parent) {
+  qRegisterMetaType<TopicTreeData>("TopicTreeData");
+
   worker_thread = new QThread(this);
   bag_worker = new BagWorker();
   db_manager = new DatabaseManager();
@@ -21,16 +24,23 @@ DataService::DataService(QObject* parent) : QObject(parent) {
   connect(bag_worker, &BagWorker::imageFrameReady, this, &DataService::imageFrameReady);
   connect(bag_worker, &BagWorker::odomFrameReady, this, &DataService::odomFrameReady);
   connect(bag_worker, &BagWorker::progressUpdated, this, &DataService::progressUpdated);
-  connect(bag_worker, &BagWorker::topicListReady, this, &DataService::topicListReady);
   connect(bag_worker, &BagWorker::messageNumReady, this, &DataService::messageNumReady);
-  
+
+  // DatabaseManager is now the source of truth for the topic list
+  connect(db_manager, &DatabaseManager::topicListReady, this, &DataService::topicListReady);
+
   connect(bag_worker, &BagWorker::topicInfoReady, this, [this](
       const QString& bag_uuid, const QString& topic_name, 
       const QString& msg_type) {
     current_bag_uuid = bag_uuid;
     emit requestInsertTopic(bag_uuid, topic_name, msg_type);
   });
-  
+
+  // When bag processing tells us message numbers, it means extraction and DB inserts are mostly done.
+  connect(bag_worker, &BagWorker::messageNumReady, this, [this](int num){
+    emit requestFetchTopicList();
+  });
+
   connect(db_manager, &DatabaseManager::payloadReady, bag_worker, &BagWorker::updateProgress);
   connect(bag_worker, &BagWorker::payloadReady, this, [this](
       const QString& topic_name, int msg_index, qint64 timestamp, 
@@ -47,6 +57,8 @@ DataService::DataService(QObject* parent) : QObject(parent) {
           &DatabaseManager::storeMessage, Qt::QueuedConnection);
   connect(this, &DataService::requestUpdateProgress, db_manager,
           &DatabaseManager::updateProgress, Qt::QueuedConnection);
+  connect(this, &DataService::requestFetchTopicList, db_manager,
+          &DatabaseManager::fetchTopicList, Qt::QueuedConnection);
   connect(this, &DataService::requestProcessBag, bag_worker,
           &BagWorker::processBag, Qt::QueuedConnection);
 

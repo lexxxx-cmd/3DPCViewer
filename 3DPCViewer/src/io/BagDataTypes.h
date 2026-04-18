@@ -5,6 +5,11 @@
 #include <vector>
 #include <cstdint>
 #include <QMetaType>
+#include <QMap>
+#include <QStringList>
+
+typedef QMap<QString, QMap<QString, QStringList>> TopicTreeData;
+Q_DECLARE_METATYPE(TopicTreeData)
 
 #include <array>
 #include <algorithm>
