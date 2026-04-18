@@ -21,6 +21,8 @@ ControlPanelWidget::ControlPanelWidget(QWidget* parent) : QWidget(parent) {
           &ControlPanelWidget::pointOpacityChanged);
   connect(ui->InterWidget, &InteractionWidget::bgColorChanged, this,
           &ControlPanelWidget::bgColorChanged);
+  connect(ui->InterWidget, &InteractionWidget::requestRunSlam, this,
+          &ControlPanelWidget::requestRunSlam);
 }
 
 void ControlPanelWidget::onFileSizeUpdated(const int& size) {

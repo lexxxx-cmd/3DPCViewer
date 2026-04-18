@@ -41,6 +41,7 @@ class PCViewer : public QMainWindow {
   void progressUpdated(const int value);
 
   void errorOccurred(const QString& error_msg);
+  void requestRunSlam(const QString& algorithm, bool is_rt_preview);
 
  private:
   std::unique_ptr<Ui::PCViewerClass> ui;

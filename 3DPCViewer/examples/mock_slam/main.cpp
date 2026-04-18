@@ -22,18 +22,25 @@ int main() {
         }
 
         if (cmd == slam::net::Command::CMD_START) {
+            // Must consume all incoming multipart segments!
+            while (socket.get(zmq::sockopt::rcvmore)) {
+                std::string dummy;
+                slam::net::receiveStringPart(socket, dummy);
+            }
+
             std::cout << "[Mock SLAM] Received CMD_START." << std::endl;
             // Acknowledge Start
             slam::net::sendCommand(socket, slam::net::Command::CMD_START, zmq::send_flags::sndmore);
             slam::net::sendStringPart(socket, "STARTED");
         } 
         else if (cmd == slam::net::Command::CMD_FRAME) {
-            std::string data;
-            int more = socket.get(zmq::sockopt::rcvmore);
-            if (more) {
+            std::vector<std::string> incoming_parts;
+            while (socket.get(zmq::sockopt::rcvmore)) {
+                std::string data;
                 slam::net::receiveStringPart(socket, data);
+                incoming_parts.push_back(data);
             }
-            std::cout << "[Mock SLAM] Received CMD_FRAME data size: " << data.size() << ". Processing..." << std::endl;
+            std::cout << "[Mock SLAM] Received CMD_FRAME with " << incoming_parts.size() << " payload parts. Processing..." << std::endl;
 
             // Simulate processing delay
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -43,6 +50,11 @@ int main() {
             slam::net::sendStringPart(socket, "FAKE_POSE_AND_CLOUD");
         } 
         else if (cmd == slam::net::Command::CMD_FINISH) {
+            while (socket.get(zmq::sockopt::rcvmore)) {
+                std::string dummy;
+                slam::net::receiveStringPart(socket, dummy);
+            }
+
             std::cout << "[Mock SLAM] Received CMD_FINISH. Shutting down." << std::endl;
             slam::net::sendCommand(socket, slam::net::Command::CMD_FINISH, zmq::send_flags::sndmore);
             slam::net::sendStringPart(socket, "SHUTTING_DOWN");

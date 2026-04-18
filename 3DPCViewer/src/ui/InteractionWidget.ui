@@ -81,6 +81,40 @@
     </widget>
    </item>
    <item>
+    <widget class="QWidget" name="widget_3" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <item>
+       <widget class="QComboBox" name="cbx_slam">
+        <item>
+         <property name="text">
+          <string>MockSLAM</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>ORBSLAM3</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pB_run_slam">
+        <property name="text">
+         <string>运行SLAM</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="rb_rt_preview">
+        <property name="text">
+         <string>实时预览</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QWidget" name="widget_4" native="true">
      <layout class="QHBoxLayout" name="horizontalLayout_4">
       <item>

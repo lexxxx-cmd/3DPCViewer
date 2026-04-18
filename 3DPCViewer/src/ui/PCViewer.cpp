@@ -32,6 +32,8 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
           &VisualAreaWidget::onChangeOpacityRequested);
   connect(ui->ControlWidget, &ControlPanelWidget::bgColorChanged, ui->ShowWidget,
           &VisualAreaWidget::onChangeBgColorRequested);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestRunSlam, this,
+          &PCViewer::requestRunSlam);
 }
 
 PCViewer::~PCViewer() = default;
