@@ -31,6 +31,7 @@ public slots:
     void batchInsertProcessedFrames(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
                                     const QString& msg_type, const QVariantList& msg_indices, 
                                     const QVariantList& timestamps, const QVariantList& payloads);
+    void setCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
     void setCurrentOrigin(const QString& origin_name);
     void updateProgress(const int percent);
     void fetchTopicList();
@@ -41,6 +42,7 @@ signals:
     void messageStored(const QString& topic_name, int msg_index);
     void payloadReady(const QString& topic_name, const int percent, const QByteArray payload);
     void topicListReady(const TopicTreeData& topics);
+    void messageNumReady(int num);
     void errorOccurred(const QString& error_msg);
 
 private:

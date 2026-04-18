@@ -110,10 +110,23 @@ void InteractionWidget::onOpacitySliderChanged(int value) {
 
 void InteractionWidget::onMaxMessageNumSet(int value) {
   max_message_num = value;
+
+  if (timer->isActive()) {
+    timer->stop();
+    is_play = false;
+    ui->pB_play_pause->setText("Play");
+  }
+
+  ui->HSlider_progress->setValue(0);
+
   if (max_message_num > 0) {
     ui->pB_play_pause->setEnabled(true);
     ui->pB_forward->setEnabled(true);
+  } else {
+    ui->pB_play_pause->setEnabled(false);
+    ui->pB_forward->setEnabled(false);
   }
+
   ui->HSlider_progress->setMaximum(max_message_num);
   ui->lbl_ProgressValue->setText(QString("%1/%2").arg(ui->HSlider_progress->value()).arg(max_message_num));
 }

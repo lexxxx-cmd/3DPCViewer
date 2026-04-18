@@ -40,6 +40,7 @@ class ControlPanelWidget : public QWidget {
   void pointOpacityChanged(const int& opacity);
   void bgColorChanged(const QColor& color);
   void requestRunSlam(const QString& algorithm, bool is_rt_preview);
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
 
  private:
   std::unique_ptr<Ui::ControlPanelWidgetClass> ui;

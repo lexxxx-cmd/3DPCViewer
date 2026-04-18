@@ -34,6 +34,8 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
           &VisualAreaWidget::onChangeBgColorRequested);
   connect(ui->ControlWidget, &ControlPanelWidget::requestRunSlam, this,
           &PCViewer::requestRunSlam);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestSetCurrentDataSource, this,
+          &PCViewer::requestSetCurrentDataSource);
 }
 
 PCViewer::~PCViewer() = default;

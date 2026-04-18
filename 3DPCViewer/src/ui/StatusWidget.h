@@ -23,6 +23,9 @@ class StatusWidget : public QWidget {
   void onUpdateTopicList(const TopicTreeData& topics);
   void onTopicStateChanged(QStandardItem* item);
 
+ signals:
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
+
  private:
   std::unique_ptr<Ui::StatusWidgetClass> ui;
   QStandardItemModel* topic_model;

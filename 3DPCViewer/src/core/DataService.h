@@ -36,6 +36,7 @@ class DataService : public QObject {
   void requestFetchTopicList();
   void requestInsertTopic(const QString& bag_uuid, const QString& topic_name,
                           const QString& msg_type);
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
   void requestStoreMessage(const QString& bag_uuid, const QString& topic_name,
                            int msg_index, qint64 timestamp,
                            const QByteArray& payload);

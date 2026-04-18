@@ -28,6 +28,7 @@ DataService::DataService(QObject* parent) : QObject(parent) {
 
   // DatabaseManager is now the source of truth for the topic list
   connect(db_manager, &DatabaseManager::topicListReady, this, &DataService::topicListReady);
+  connect(db_manager, &DatabaseManager::messageNumReady, this, &DataService::messageNumReady);
 
   connect(bag_worker, &BagWorker::topicInfoReady, this, [this](
       const QString& bag_uuid, const QString& topic_name, 
@@ -59,6 +60,8 @@ DataService::DataService(QObject* parent) : QObject(parent) {
           &DatabaseManager::updateProgress, Qt::QueuedConnection);
   connect(this, &DataService::requestFetchTopicList, db_manager,
           &DatabaseManager::fetchTopicList, Qt::QueuedConnection);
+  connect(this, &DataService::requestSetCurrentDataSource, db_manager,
+          &DatabaseManager::setCurrentDataSource, Qt::QueuedConnection);
   connect(this, &DataService::requestProcessBag, bag_worker,
           &BagWorker::processBag, Qt::QueuedConnection);
 

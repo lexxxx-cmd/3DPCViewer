@@ -22,7 +22,13 @@ void StatusWidget::onUpdateTopicList(const TopicTreeData& all_topics) {
   topic_model->blockSignals(true);
 
   for (auto bag_it = all_topics.begin(); bag_it != all_topics.end(); ++bag_it) {
-    QString bag_name = bag_it.key();
+    QString compound_key = bag_it.key();
+    QStringList parts = compound_key.split("|");
+    if (parts.size() < 2) continue; // Safety check
+
+    QString bag_uuid = parts[0];
+    QString bag_name = parts[1];
+
     QStandardItem* bag_item = new QStandardItem(bag_name);
     bag_item->setEditable(false);
     bag_item->setSelectable(false);
@@ -44,7 +50,7 @@ void StatusWidget::onUpdateTopicList(const TopicTreeData& all_topics) {
 
           // Store metadata
           topic_item->setData(origin_name, Qt::UserRole + 1);
-          topic_item->setData(bag_name, Qt::UserRole + 2);
+          topic_item->setData(bag_uuid, Qt::UserRole + 2);
 
           group_item->appendRow(topic_item);
       }
@@ -63,13 +69,50 @@ void StatusWidget::onUpdateTopicList(const TopicTreeData& all_topics) {
 void StatusWidget::onTopicStateChanged(QStandardItem* item) {
   if (!item) return;
 
-  QString topic_name = item->text();
   bool is_checked = (item->checkState() == Qt::Checked);
 
   if (is_checked) {
+      // 1. Get the current focal properties from this checked item
+      QString active_origin = item->data(Qt::UserRole + 1).toString();
+      QString active_uuid = item->data(Qt::UserRole + 2).toString();
 
+      // Ensure this item is technically a Topic leaf node
+      if (!active_uuid.isEmpty() && !active_origin.isEmpty()) {
+          // 2. Perform exclusive uncheck across the entire tree
+          topic_model->blockSignals(true);
+
+          for (int b = 0; b < topic_model->rowCount(); ++b) {
+              QStandardItem* bag_node = topic_model->item(b);
+              if (!bag_node) continue;
+
+              for (int o = 0; o < bag_node->rowCount(); ++o) {
+                  QStandardItem* origin_node = bag_node->child(o);
+                  if (!origin_node) continue;
+
+                  for (int t = 0; t < origin_node->rowCount(); ++t) {
+                      QStandardItem* target_topic = origin_node->child(t);
+                      if (!target_topic || target_topic == item) continue;
+
+                      QString target_origin = target_topic->data(Qt::UserRole + 1).toString();
+                      QString target_uuid = target_topic->data(Qt::UserRole + 2).toString();
+
+                      // If this topic belongs to a DIFFERENT Bag OR a DIFFERENT Origin group, UNCHECK it!
+                      if (target_uuid != active_uuid || target_origin != active_origin) {
+                          if (target_topic->checkState() == Qt::Checked) {
+                              target_topic->setCheckState(Qt::Unchecked);
+                          }
+                      }
+                  }
+              }
+          }
+
+          topic_model->blockSignals(false);
+
+          // 3. Inform the DataService to update the backend Focus Pointers for playback
+          emit requestSetCurrentDataSource(active_uuid, active_origin);
+      }
   } else {
-
+      // Logic for unchecking a node (can be left blank unless full cleanup is needed)
   }
 }
 

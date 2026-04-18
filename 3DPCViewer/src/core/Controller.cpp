@@ -36,6 +36,7 @@ void Controller::setup_connections() {
   connect(data_service.get(), &DataService::messageNumReady, viewer.get(), &PCViewer::messageNumReady);
 
   connect(viewer.get(), &PCViewer::requestRunSlam, this, &Controller::handleRunSlamRequest);
+  connect(viewer.get(), &PCViewer::requestSetCurrentDataSource, data_service.get(), &DataService::requestSetCurrentDataSource);
 
   connect(slam_manager.get(), &slam::SLAMNodeManager::nodeOutputReceived, this, [](const QString& msg){
     qDebug() << "[SLAM Process] :" << msg;

@@ -159,6 +159,36 @@ void DatabaseManager::insertTopicWithOrigin(const QString& bag_uuid, const QStri
     }
 }
 
+void DatabaseManager::setCurrentDataSource(const QString& bag_uuid, const QString& origin_name) {
+    current_bag_uuid = bag_uuid;
+    current_origin_name = origin_name;
+    qDebug() << "Database focal point switched -> UUID:" << current_bag_uuid << "| Origin:" << current_origin_name;
+
+    // Compute new max message count for the current focal point
+    int max_msg_count = 0;
+    QSqlQuery query(db);
+    query.prepare("SELECT dynamic_table_name FROM origin WHERE bag_uuid = ? AND origin_name = ?");
+    query.addBindValue(current_bag_uuid);
+    query.addBindValue(current_origin_name);
+
+    if (query.exec()) {
+        while (query.next()) {
+            QString table_name = query.value(0).toString();
+            QSqlQuery count_query(db);
+            count_query.prepare(QString("SELECT MAX(msg_index) FROM %1").arg(table_name));
+            if (count_query.exec() && count_query.next()) {
+                int count = count_query.value(0).toInt() + 1; // 0-based index
+                if (count > max_msg_count) {
+                    max_msg_count = count;
+                }
+            }
+        }
+    }
+
+    // Notify the UI
+    emit messageNumReady(max_msg_count);
+}
+
 void DatabaseManager::setCurrentOrigin(const QString& origin_name) {
     current_origin_name = origin_name;
 }
@@ -265,7 +295,7 @@ void DatabaseManager::updateProgress(const int percent) {
 void DatabaseManager::fetchTopicList() {
     try {
         QSqlQuery query(db);
-        query.prepare("SELECT b.file_path, o.origin_name, o.topic_name "
+        query.prepare("SELECT b.bag_uuid, b.file_path, o.origin_name, o.topic_name "
                       "FROM origin o "
                       "JOIN bags b ON o.bag_uuid = b.bag_uuid "
                       "ORDER BY b.file_path, o.origin_name");
@@ -276,12 +306,15 @@ void DatabaseManager::fetchTopicList() {
 
         TopicTreeData all_topics;
         while (query.next()) {
-            QString file_path = query.value(0).toString();
+            QString bag_uuid = query.value(0).toString();
+            QString file_path = query.value(1).toString();
             QString bag_name = QFileInfo(file_path).fileName();
-            QString origin_name = query.value(1).toString();
-            QString topic_name = query.value(2).toString();
+            QString origin_name = query.value(2).toString();
+            QString topic_name = query.value(3).toString();
 
-            all_topics[bag_name][origin_name].append(topic_name);
+            QString compound_key = bag_uuid + "|" + bag_name;
+
+            all_topics[compound_key][origin_name].append(topic_name);
         }
 
         emit topicListReady(all_topics);
