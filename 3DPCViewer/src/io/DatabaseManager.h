@@ -18,9 +18,17 @@ public slots:
     void initialize(const QString& bag_path);
     void storeMessage(const QString& bag_uuid, const QString& topic_name, 
                       int msg_index, qint64 timestamp, const QByteArray& payload);
+    void storeMessageWithOrigin(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
+                                int msg_index, qint64 timestamp, const QByteArray& payload);
     QString insertBag(const QString& bag_path);
     void insertTopic(const QString& bag_uuid, const QString& topic_name,
         const QString& msg_type);
+    void insertTopicWithOrigin(const QString& bag_uuid, const QString& origin_name, const QString& topic_name,
+        const QString& msg_type);
+    void batchInsertProcessedFrames(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
+                                    const QString& msg_type, const QVariantList& msg_indices, 
+                                    const QVariantList& timestamps, const QVariantList& payloads);
+    void setCurrentOrigin(const QString& origin_name);
     void updateProgress(const int percent);
     void close();
 
@@ -34,6 +42,7 @@ private:
     QSqlDatabase db;
     QString db_path;
     QString current_bag_uuid;
+    QString current_origin_name = "raw";
     std::unordered_map<std::string, QString> topic_table_map;
 
     void createMetaTables();

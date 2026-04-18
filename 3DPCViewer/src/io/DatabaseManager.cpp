@@ -53,14 +53,15 @@ void DatabaseManager::createMetaTables() {
     }
     
     QString create_topics_table = 
-        "CREATE TABLE IF NOT EXISTS topics ("
+        "CREATE TABLE IF NOT EXISTS origin ("
         "bag_uuid TEXT NOT NULL, "
+        "origin_name TEXT NOT NULL, "
         "topic_name TEXT NOT NULL, "
         "msg_type TEXT, "
         "dynamic_table_name TEXT NOT NULL, "
-        "PRIMARY KEY(bag_uuid, topic_name), "
+        "PRIMARY KEY(bag_uuid, origin_name, topic_name), "
         "FOREIGN KEY(bag_uuid) REFERENCES bags(bag_uuid))";
-    
+
     if (!query.exec(create_topics_table)) {
         throw std::runtime_error("Failed to create topics table: " + query.lastError().text().toStdString());
     }
@@ -87,8 +88,14 @@ QString DatabaseManager::generateUUID() {
 
 void DatabaseManager::storeMessage(const QString& bag_uuid, const QString& topic_name, 
                                     int msg_index, qint64 timestamp, const QByteArray& payload) {
+    storeMessageWithOrigin(bag_uuid, "raw", topic_name, msg_index, timestamp, payload);
+}
+
+void DatabaseManager::storeMessageWithOrigin(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
+                                             int msg_index, qint64 timestamp, const QByteArray& payload) {
     try {
-        QString table_name = QString("data_b_%1_t_%2")
+        QString table_name = QString("data_o_%1_b_%2_t_%3")
+            .arg(QString::number(qHash(origin_name), 16).mid(0, 4))
             .arg(bag_uuid.mid(0, 8))
             .arg(QString::number(qHash(topic_name), 16).mid(0, 8));
         
@@ -112,25 +119,36 @@ void DatabaseManager::storeMessage(const QString& bag_uuid, const QString& topic
 
 void DatabaseManager::insertTopic(const QString& bag_uuid, const QString& topic_name, 
                                    const QString& msg_type) {
+    insertTopicWithOrigin(bag_uuid, "raw", topic_name, msg_type);
+}
+
+void DatabaseManager::insertTopicWithOrigin(const QString& bag_uuid, const QString& origin_name, 
+                                             const QString& topic_name, const QString& msg_type) {
     current_bag_uuid = bag_uuid;
 
-    QString table_name = QString("data_b_%1_t_%2")
+    QString table_name = QString("data_o_%1_b_%2_t_%3")
+                            .arg(QString::number(qHash(origin_name), 16).mid(0, 4))
                             .arg(bag_uuid.mid(0, 8))
                             .arg(QString::number(qHash(topic_name), 16).mid(0, 8));
-    
+
     createDynamicTable(table_name);
-    
+
     QSqlQuery query(db);
-    query.prepare("INSERT INTO topics (bag_uuid, topic_name, msg_type, dynamic_table_name) "
-                  "VALUES (?, ?, ?, ?)");
+    query.prepare("INSERT OR IGNORE INTO origin (bag_uuid, origin_name, topic_name, msg_type, dynamic_table_name) "
+                  "VALUES (?, ?, ?, ?, ?)");
     query.addBindValue(bag_uuid);
+    query.addBindValue(origin_name);
     query.addBindValue(topic_name);
     query.addBindValue(msg_type);
     query.addBindValue(table_name);
-    
+
     if (!query.exec()) {
         throw std::runtime_error("Failed to insert topic: " + query.lastError().text().toStdString());
     }
+}
+
+void DatabaseManager::setCurrentOrigin(const QString& origin_name) {
+    current_origin_name = origin_name;
 }
 
 void DatabaseManager::createDynamicTable(const QString& table_name) {
@@ -161,11 +179,50 @@ void DatabaseManager::close() {
     }
 }
 
+void DatabaseManager::batchInsertProcessedFrames(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
+                                                 const QString& msg_type, const QVariantList& msg_indices, 
+                                                 const QVariantList& timestamps, const QVariantList& payloads) {
+    try {
+        if (msg_indices.size() != timestamps.size() || timestamps.size() != payloads.size()) {
+            throw std::runtime_error("batchInsertProcessedFrames: List sizes do not match.");
+        }
+
+        // 1. Ensure topic entry exists in origin
+        insertTopicWithOrigin(bag_uuid, origin_name, topic_name, msg_type);
+
+        QString table_name = QString("data_o_%1_b_%2_t_%3")
+                                .arg(QString::number(qHash(origin_name), 16).mid(0, 4))
+                                .arg(bag_uuid.mid(0, 8))
+                                .arg(QString::number(qHash(topic_name), 16).mid(0, 8));
+
+        // 2. Perform batched transaction inserts
+        db.transaction();
+        QSqlQuery query(db);
+        QString insert_sql = QString("INSERT INTO %1 (msg_index, timestamp, data) VALUES (?, ?, ?)")
+                                .arg(table_name);
+        query.prepare(insert_sql);
+
+        query.addBindValue(msg_indices);
+        query.addBindValue(timestamps);
+        query.addBindValue(payloads);
+
+        if (!query.execBatch()) {
+            throw std::runtime_error("Failed to execute batch insert: " + query.lastError().text().toStdString());
+        }
+        db.commit();
+
+    } catch (const std::exception& e) {
+        db.rollback();
+        emit errorOccurred(QString::fromStdString(e.what()));
+    }
+}
+
 void DatabaseManager::updateProgress(const int percent) {
     try {
         QSqlQuery topic_query(db);
-        topic_query.prepare("SELECT topic_name, dynamic_table_name FROM topics WHERE bag_uuid = ?");
+        topic_query.prepare("SELECT topic_name, dynamic_table_name FROM origin WHERE bag_uuid = ? AND origin_name = ?");
         topic_query.addBindValue(current_bag_uuid);
+        topic_query.addBindValue(current_origin_name);
 
         if (!topic_query.exec()) {
             throw std::runtime_error("Failed to query topics: " + topic_query.lastError().text().toStdString());
