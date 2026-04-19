@@ -21,13 +21,12 @@ class Controller : public QObject {
  private slots:
   void handleRunSlamRequest(const QString& algorithm, bool is_rt_preview);
   void handleSlamResponse(slam::net::Command cmd, const QList<QByteArray>& parts);
-  void handleMockFrameSend();
+  void handleNextSlamFrame(const QString& topic, const QByteArray& payload, qint64 timestamp);
 
  private:
   std::unique_ptr<PCViewer> viewer;
   std::unique_ptr<DataService> data_service;
   std::unique_ptr<slam::SLAMNodeManager> slam_manager;
-  
+
   bool is_rt_preview_enabled_ = false;
-  QTimer* mock_timer_ = nullptr;
 };

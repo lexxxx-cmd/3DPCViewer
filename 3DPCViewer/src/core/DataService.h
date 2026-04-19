@@ -28,11 +28,14 @@ class DataService : public QObject {
   void progressUpdated(int percent);
   void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
+  void nextSlamFrameReady(const QString& topic, const QByteArray& payload, qint64 timestamp);
+  void slamStreamFinished();
   void errorOccurred(const QString& error_msg);
   void finished();
 
   // Internal signals for cross-thread communication (replacing invokeMethod)
   void requestInitializeDb(const QString& bag_path);
+  void requestFetchNextSlamFrame();
   void requestFetchTopicList();
   void requestInsertTopic(const QString& bag_uuid, const QString& topic_name,
                           const QString& msg_type);

@@ -193,6 +193,82 @@ void DatabaseManager::setCurrentOrigin(const QString& origin_name) {
     current_origin_name = origin_name;
 }
 
+bool DatabaseManager::initSlamStream() {
+    if (!db.isOpen()) return false;
+
+    // Target tracking origin: usually "raw" when feeding a SLAM algorithm
+    QSqlQuery query(db);
+    query.prepare("SELECT topic_name, dynamic_table_name FROM origin WHERE bag_uuid = ? AND origin_name = 'raw'");
+    query.addBindValue(current_bag_uuid);
+    if (!query.exec()) {
+        emit errorOccurred("Failed to query origin tables for SLAM stream.");
+        return false;
+    }
+
+    QStringList union_parts;
+    while (query.next()) {
+        QString topic = query.value(0).toString();
+        QString table = query.value(1).toString();
+
+        // Build lightweight projection mapping block WITHOUT grabbing big BLOBs
+        QString part = QString("SELECT '%1' AS topic, '%2' AS tbl, msg_index, timestamp FROM %2").arg(topic, table);
+        union_parts.append(part);
+    }
+
+    if (union_parts.isEmpty()) {
+        return false; // No raw topics found!
+    }
+
+    // Connect them and order chronologically
+    QString final_sql = union_parts.join(" UNION ALL ") + " ORDER BY timestamp ASC";
+
+    slam_stream_query = std::make_unique<QSqlQuery>(db);
+    slam_stream_query->setForwardOnly(true); // Huge optimization for simple sequential reading
+
+    if (!slam_stream_query->exec(final_sql)) {
+        emit errorOccurred("Failed to build SLAM tracking UNION query: " + slam_stream_query->lastError().text());
+        slam_stream_query.reset();
+        return false;
+    }
+
+    return true;
+}
+
+void DatabaseManager::fetchNextSlamFrame() {
+    if (!slam_stream_query || !slam_stream_query->isActive()) {
+        emit slamStreamFinished();
+        return;
+    }
+
+    if (slam_stream_query->next()) {
+        QString out_topic = slam_stream_query->value(0).toString();
+        QString table = slam_stream_query->value(1).toString();
+        int msg_index = slam_stream_query->value(2).toInt();
+        qint64 out_timestamp = slam_stream_query->value(3).toLongLong();
+
+        // One-off fast extraction of the binary data
+        QSqlQuery payload_query(db);
+        payload_query.prepare(QString("SELECT data FROM %1 WHERE msg_index = ?").arg(table));
+        payload_query.addBindValue(msg_index);
+
+        if (payload_query.exec() && payload_query.next()) {
+            QByteArray out_payload = payload_query.value(0).toByteArray();
+            emit nextSlamFrameReady(out_topic, out_payload, out_timestamp);
+            return;
+        }
+    }
+
+    // Iterator reached the end or failed
+    emit slamStreamFinished();
+}
+
+void DatabaseManager::stopSlamStream() {
+    if (slam_stream_query) {
+        slam_stream_query->finish();
+        slam_stream_query.reset();
+    }
+}
+
 void DatabaseManager::createDynamicTable(const QString& table_name) {
     QSqlQuery query(db);
     QString create_sql = QString(

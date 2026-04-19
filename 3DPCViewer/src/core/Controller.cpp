@@ -12,9 +12,6 @@ Controller::Controller(QObject* parent) : QObject(parent) {
   data_service = std::make_unique<DataService>();
   slam_manager = std::make_unique<slam::SLAMNodeManager>();
 
-  mock_timer_ = new QTimer(this);
-  mock_timer_->setInterval(100);
-
   setup_connections();
 }
 
@@ -44,7 +41,11 @@ void Controller::setup_connections() {
   
   connect(slam_manager.get(), &slam::SLAMNodeManager::slamResponseReceived, this, &Controller::handleSlamResponse);
 
-  connect(mock_timer_, &QTimer::timeout, this, &Controller::handleMockFrameSend);
+  connect(data_service.get(), &DataService::nextSlamFrameReady, this, &Controller::handleNextSlamFrame);
+  connect(data_service.get(), &DataService::slamStreamFinished, this, [this]() {
+     qDebug() << "SLAM Stream exhausted, sending CMD_FINISH";
+     slam_manager->sendFinishCommand({});
+  });
 }
 
 void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_preview) {
@@ -59,12 +60,18 @@ void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_previ
   if (algorithm == "MockSLAM") {
     bool ok = slam_manager->startAlgorithm("examples/mock_slam/mock_slam_node.exe", QStringList(), "tcp://127.0.0.1:5555");
     if (ok) {
-       qDebug() << "Mock SLAM process started alongside ZMQ network worker! Sending CMD_START shortly...";
-       
-       // Give it a tiny bit of time to bind ZMQ inside the child process. Then send START.
-       QTimer::singleShot(1000, this, [this](){
-         slam_manager->sendStartCommand({QByteArray("MockBagUUID"), QByteArray("MockConfigXYZ")});
-       });
+       qDebug() << "Mock SLAM process started! Initializing Real DB Stream and forcing start...";
+       bool stream_ok = false;
+       QMetaObject::invokeMethod(data_service->getDbManager(), "initSlamStream", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, stream_ok));
+
+       if (stream_ok) {
+           QTimer::singleShot(1000, this, [this](){
+             slam_manager->sendStartCommand({QByteArray("RealBagUUID"), QByteArray("MockConfigXYZ")});
+           });
+       } else {
+           qDebug() << "Failed to init SQL Stream for SLAM!";
+           slam_manager->stopAlgorithm();
+       }
     } else {
        qDebug() << "Failed to start mock_slam.exe";
     }
@@ -76,44 +83,45 @@ void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_previ
 void Controller::handleSlamResponse(slam::net::Command cmd, const QList<QByteArray>& parts) {
   qDebug() << "Controller handled SLAM Response -> CMD:" << static_cast<int>(cmd) << "Parts:" << parts.size();
 
-  if (cmd == slam::net::Command::CMD_START && parts.size() > 0 && 
-      (QString::fromUtf8(parts[0]) == "OK" || QString::fromUtf8(parts[0]) == "STARTED")) {
-     qDebug() << "SLAM started successfully according to response! Beginning simulated frame push...";
-     // Stop fixed timer and use Ping-Pong (one frame at a time)
-     if (mock_timer_) mock_timer_->stop();
-     QTimer::singleShot(10, this, &Controller::handleMockFrameSend);
-  } 
-  else if (cmd == slam::net::Command::CMD_FRAME) {
-     qDebug() << "Got processed frame result from Mock SLAM.";
-     static int count = 0;
-     count++;
-     if (count >= 20) {
-        qDebug() << "Sent 20 frames, stopping simulation and sending CMD_FINISH";
-        slam_manager->sendFinishCommand({});
-        count = 0;
-     } else {
-        // Ping-pong flow: Fire next mock frame only AFTER we get current frame's response
-        QTimer::singleShot(10, this, &Controller::handleMockFrameSend);
-     }
+      if (cmd == slam::net::Command::CMD_START && parts.size() > 0 && 
+        (QString::fromUtf8(parts[0]) == "OK" || QString::fromUtf8(parts[0]) == "STARTED")) {
+       qDebug() << "SLAM started successfully according to response! Beginning REAL frame push...";
+       // Fire the first request for real payload
+       emit data_service->requestFetchNextSlamFrame();
+    } 
+    else if (cmd == slam::net::Command::CMD_FRAME) {
+       // Ping-pong flow: Fire next real frame only AFTER we get current frame's response
+       QTimer::singleShot(1, this, [this]() {
+           emit data_service->requestFetchNextSlamFrame();
+       });
 
-     if (is_rt_preview_enabled_ && parts.size() > 1) {
-        // Just acknowledging that real-time preview would be intercepted here
-        qDebug() << "RT Preview is ENABLED, intercepting payload for visualization:" << parts.size() << "parts provided.";
-     }
+       if (is_rt_preview_enabled_ && parts.size() > 1) {
+          // Just acknowledging that real-time preview would be intercepted here
+          // qDebug() << "RT Preview is ENABLED, intercepting payload for visualization:" << parts.size() << "parts provided.";
+       }
+    }
+    else if (cmd == slam::net::Command::CMD_FINISH) {
+       qDebug() << "SLAM node finished normally!";
+       slam_manager->stopAlgorithm();
+       QMetaObject::invokeMethod(data_service->getDbManager(), "stopSlamStream", Qt::QueuedConnection);
+    }
   }
-  else if (cmd == slam::net::Command::CMD_FINISH) {
-     qDebug() << "Mock SLAM finished normally!";
-     slam_manager->stopAlgorithm();
-  }
-}
 
-void Controller::handleMockFrameSend() {
-  if (slam_manager->isRunning()) {
-      QByteArray mockPcData("MockPointCloudBlob");
-      QByteArray mockTimestamp(QString::number(QDateTime::currentMSecsSinceEpoch()).toUtf8());
-      QList<QByteArray> payload = { mockTimestamp, mockPcData };
-      slam_manager->sendFrameCommand(payload);
-  } else {
-      mock_timer_->stop();
+  void Controller::handleNextSlamFrame(const QString& topic, const QByteArray& payload, qint64 timestamp) {
+    if (slam_manager->isRunning()) {
+        static int test_count = 0;
+        if (test_count < 20) {
+            qDebug() << "frame:" << test_count 
+                     << "timestamp:" << timestamp 
+                     << "topic:" << topic 
+                     << "payload size:" << payload.size();
+            test_count++;
+        }
+
+        QByteArray ts_bytes = QString::number(timestamp).toUtf8();
+        // Using existing payload mechanism; usually we'd pass topic, ts, payload
+        // For now pass ts and full payload block 
+        QList<QByteArray> parts = { ts_bytes, payload };
+        slam_manager->sendFrameCommand(parts);
+    }
   }
-}

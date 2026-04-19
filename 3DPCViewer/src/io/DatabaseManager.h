@@ -1,5 +1,7 @@
 #pragma once
 
+#pragma once
+
 #include <QObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -8,6 +10,7 @@
 #include <QVariantList>
 #include <QMap>
 #include <QStringList>
+#include <memory>
 #include "BagDataTypes.h"
 
 class DatabaseManager : public QObject {
@@ -33,6 +36,13 @@ public slots:
                                     const QVariantList& timestamps, const QVariantList& payloads);
     void setCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
     void setCurrentOrigin(const QString& origin_name);
+
+    public slots:
+    // SLAM Stream execution
+    bool initSlamStream();
+    void fetchNextSlamFrame();
+    void stopSlamStream();
+
     void updateProgress(const int percent);
     void fetchTopicList();
     void close();
@@ -41,6 +51,8 @@ signals:
     void initialized(const QString& bag_uuid);
     void messageStored(const QString& topic_name, int msg_index);
     void payloadReady(const QString& topic_name, const int percent, const QByteArray payload);
+    void nextSlamFrameReady(const QString& topic, const QByteArray& payload, qint64 timestamp);
+    void slamStreamFinished();
     void topicListReady(const TopicTreeData& topics);
     void messageNumReady(int num);
     void errorOccurred(const QString& error_msg);
@@ -52,6 +64,8 @@ private:
     QString current_bag_path;
     QString current_origin_name = "raw";
     std::unordered_map<std::string, QString> topic_table_map;
+
+    std::unique_ptr<QSqlQuery> slam_stream_query = nullptr;
 
     void createMetaTables();
     QString generateUUID();
