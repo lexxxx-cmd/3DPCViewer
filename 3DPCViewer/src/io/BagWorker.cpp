@@ -23,18 +23,20 @@ void BagWorker::processBag(const QString& bag_path) {
   Rosbag bag(bag_path.toStdString());
   std::vector<std::string> topic_list = bag.getAvailableTopics();
   std::vector<std::string> type_list = bag.getAvailableTypes();
+  std::unordered_map<std::string, std::string> topic_to_type;
 
   QString bag_uuid = generateUUID();
 
   for (int i = 0; i < topic_list.size(); i++) {
     std::string topic = topic_list[i];
     std::string msg_type = type_list[i];
-    
+    topic_to_type[topic] = msg_type;
+
     emit topicInfoReady(bag_uuid, QString::fromStdString(topic), QString::fromStdString(msg_type));
   }
 
   const std::string path_str = bag_path.toStdString();
-  using TopicPayloads = std::pair<std::string, std::vector<std::vector<uint8_t>>>;
+  using TopicPayloads = std::pair<std::string, std::vector<std::pair<int64_t, std::vector<uint8_t>>>>;
   std::vector<std::future<TopicPayloads>> futures;
   futures.reserve(topic_list.size());
 
@@ -51,11 +53,13 @@ void BagWorker::processBag(const QString& bag_path) {
   for (auto& fut : futures) {
     auto [topic, payloads] = fut.get();
     max_size = std::max(max_size, static_cast<int>(payloads.size()));
+    std::string msg_type = topic_to_type[topic];
+
     for (int i = 0; i < payloads.size(); ++i) {
         QString topic_name = QString::fromStdString(topic);
-        qint64 timestamp = 0;
+        qint64 timestamp = payloads[i].first; // Accurately parsed Bag receipt time
 
-        QByteArray payload_data(reinterpret_cast<const char*>(payloads[i].data()), payloads[i].size());
+        QByteArray payload_data(reinterpret_cast<const char*>(payloads[i].second.data()), payloads[i].second.size());
 
         emit payloadReady(topic_name, i, timestamp, payload_data);
     }

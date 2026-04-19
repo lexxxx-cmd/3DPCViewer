@@ -69,7 +69,7 @@ public:
     void saveDataOnTopic(const std::string &topic_name,
                          const std::string &output_path);
 
-    std::vector<std::vector<uint8_t>> getRawPayloads(const std::string& topic_name);// ��ȡtopicԭʼ������
+    std::vector<std::pair<int64_t, std::vector<uint8_t>>> getRawPayloads(const std::string& topic_name);
 
 private:
     void readString(std::string &str, int n_bytes);
