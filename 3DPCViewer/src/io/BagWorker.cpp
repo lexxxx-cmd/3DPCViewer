@@ -3,9 +3,22 @@
 #include <QDebug>
 #include <QImage>
 #include <QUuid>
+#include <QFileInfo>
 #include <execution>
 #include <future>
 #include <numeric>
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+
+template <typename T>
+void ReadBinaryLittleEndian(std::istream* stream, T* data) {
+    stream->read(reinterpret_cast<char*>(data), sizeof(T));
+}
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), stop_flag(false) {}
 
@@ -71,6 +84,120 @@ void BagWorker::processBag(const QString& bag_path) {
   }
   emit messageNumReady(max_size);
   emit finished();
+}
+
+
+
+void BagWorker::processBin(const QString& bin_path) {
+    std::ifstream file(bin_path.toStdString(), std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "无法打开文件: " << bin_path.toStdString() << std::endl;
+        return;
+    }
+
+    // 获取文件名用于判定
+    QFileInfo fileInfo(bin_path);
+    QString fileName = fileInfo.fileName();
+
+    if (fileName.startsWith("images")) {
+        // ======================== 逻辑 A: 处理 images.bin (相机位姿) ========================
+        uint64_t num_images;
+        ReadBinaryLittleEndian(&file, &num_images);
+        std::cout << "正在处理 images.bin, 总图像数: " << num_images << std::endl;
+
+        for (size_t i = 0; i < num_images; ++i) {
+            uint32_t image_id;
+            ReadBinaryLittleEndian(&file, &image_id);
+
+            double qw, qx, qy, qz, tx, ty, tz;
+            ReadBinaryLittleEndian(&file, &qw);
+            ReadBinaryLittleEndian(&file, &qx);
+            ReadBinaryLittleEndian(&file, &qy);
+            ReadBinaryLittleEndian(&file, &qz);
+            ReadBinaryLittleEndian(&file, &tx);
+            ReadBinaryLittleEndian(&file, &ty);
+            ReadBinaryLittleEndian(&file, &tz);
+
+            uint32_t camera_id;
+            ReadBinaryLittleEndian(&file, &camera_id);
+
+            std::string name;
+            char name_char;
+            while (file.read(&name_char, 1) && name_char != '\0') name += name_char;
+
+            // 变换逻辑: World-to-Camera -> Camera-to-World (获取世界系中心)
+            Eigen::Quaterniond q(qw, qx, qy, qz);
+            Eigen::Matrix3d R = q.toRotationMatrix();
+            Eigen::Vector3d t(tx, ty, tz);
+            Eigen::Vector3d camera_center = -R.transpose() * t;
+
+            // 跳过 2D 特征点
+            uint64_t num_points2D;
+            ReadBinaryLittleEndian(&file, &num_points2D);
+            file.seekg(num_points2D * 24, std::ios::cur);
+
+            // 封装数据
+            OdomFrame Frame;
+            Frame.timestamp = i;
+            Frame.index = i;
+            Frame.pose.qw = qw;
+            Frame.pose.qx = qx;
+            Frame.pose.qy = qy;
+            Frame.pose.qz = qz;
+            Frame.pose.x = camera_center.x();
+            Frame.pose.y = camera_center.y();
+            Frame.pose.z = camera_center.z();
+            emit odomFrameReady(Frame);
+        }
+    }
+    else if (fileName.startsWith("points3D")) {
+        // ======================== 逻辑 B: 处理 points3D.bin (空间点云) ========================
+        uint64_t num_points3D;
+        ReadBinaryLittleEndian(&file, &num_points3D);
+        std::cout << "正在处理 points3D.bin, 总点数: " << num_points3D << std::endl;
+        GeneralCloudFrame Frame;
+        Frame.points.resize(num_points3D);
+        Frame.frame_id = "1";
+        Frame.timestamp = 1;
+        for (size_t i = 0; i < num_points3D; ++i) {
+            uint64_t point3D_id;
+            ReadBinaryLittleEndian(&file, &point3D_id);
+
+            // 读取 XYZ 坐标
+            double x, y, z;
+            ReadBinaryLittleEndian(&file, &x);
+            ReadBinaryLittleEndian(&file, &y);
+            ReadBinaryLittleEndian(&file, &z);
+
+            // 读取 RGB 颜色
+            uint8_t r, g, b;
+            ReadBinaryLittleEndian(&file, &r);
+            ReadBinaryLittleEndian(&file, &g);
+            ReadBinaryLittleEndian(&file, &b);
+
+            // 读取重投影误差
+            double error;
+            ReadBinaryLittleEndian(&file, &error);
+
+            // 跳过 Track 轨迹数据 (track_len * 8 字节)
+            uint64_t track_len;
+            ReadBinaryLittleEndian(&file, &track_len);
+            file.seekg(track_len * 8, std::ios::cur);
+
+            Frame.points[i].point_i.x = static_cast<float>(x);
+            Frame.points[i].point_i.y = static_cast<float>(y);
+            Frame.points[i].point_i.z = static_cast<float>(z);
+            Frame.points[i].r = r;
+            Frame.points[i].g = g;
+            Frame.points[i].b = b;
+
+            // 如果你的 OdomFrame 支持颜色，可以额外赋值，否则这里仅传递位置用于可视化
+            emit cloudFrameReady(Frame);
+        }
+    }
+
+    file.close();
+    emit finished();
 }
 
 void BagWorker::updateProgress(const QString& topic_name, const int percent, const QByteArray& payload_data) {

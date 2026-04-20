@@ -30,6 +30,7 @@ class ControlPanelWidget : public QWidget {
 
  signals:
   void requestProcessBag(const QString& path);
+  void requestProcessBin(const QString& bin_path);
   void requestUpdateFileSize(const int& size);
   void requestUpdatePointSize(const int& num);
   void topicListReady(const TopicTreeData& topics);

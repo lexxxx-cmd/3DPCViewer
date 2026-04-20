@@ -15,6 +15,7 @@ class BagWorker : public QObject {
 
  public slots:
   void processBag(const QString& bag_path);
+  void processBin(const QString& bag_path);
   void updateProgress(const QString& topic_name, const int percent, const QByteArray& payload_data);
   void stopProcessing();
 

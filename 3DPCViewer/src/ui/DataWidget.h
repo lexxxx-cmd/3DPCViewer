@@ -17,6 +17,7 @@ class DataWidget : public QWidget {
 
  signals:
   void requestProcessBag(const QString& bag_path);
+  void requestProcessBin(const QString& bin_path);
 
  private:
   std::unique_ptr<Ui::DataWidgetClass> ui;

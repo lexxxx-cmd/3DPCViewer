@@ -6,6 +6,8 @@ ControlPanelWidget::ControlPanelWidget(QWidget* parent) : QWidget(parent) {
   
   connect(ui->DataW, &DataWidget::requestProcessBag, this,
           &ControlPanelWidget::requestProcessBag);
+  connect(ui->DataW, &DataWidget::requestProcessBin, this,
+      &ControlPanelWidget::requestProcessBin);
   connect(this, &ControlPanelWidget::topicListReady, ui->StatusW,
           &StatusWidget::onUpdateTopicList);
   connect(this, &ControlPanelWidget::messageNumReady, ui->InterWidget,

@@ -26,6 +26,7 @@ void Controller::run() {
 
 void Controller::setup_connections() {
   connect(viewer.get(), &PCViewer::requestProcessBag, data_service.get(), &DataService::startProcess);
+  connect(viewer.get(), &PCViewer::requestProcessBin, data_service.get(), &DataService::requestProcessBin);
   connect(viewer.get(), &PCViewer::progressUpdated, data_service.get(), &DataService::updateProgress);
 
   connect(data_service.get(), &DataService::cloudFrameReady, viewer.get(), &PCViewer::cloudFrameReady);

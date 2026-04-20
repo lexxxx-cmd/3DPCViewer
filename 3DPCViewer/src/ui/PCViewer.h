@@ -26,6 +26,7 @@ class PCViewer : public QMainWindow {
  signals:
   void requestLoadFile(const QString& path);
   void requestProcessBag(const QString& path);
+  void requestProcessBin(const QString& bin_path);
   void requestUpdateFileSize(const int& size);
   void requestUpdateFps(const int& fps);
   void requestShowNormals(const bool& show);

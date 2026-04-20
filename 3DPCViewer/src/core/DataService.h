@@ -18,6 +18,7 @@ class DataService : public QObject {
 
  public slots:
   void startProcess(const QString& path);
+  void startProcessBin(const QString& path);
   void updateProgress(const int value);
   void stopProcess();
 
@@ -46,6 +47,7 @@ class DataService : public QObject {
                            const QByteArray& payload);
   void requestUpdateProgress(int percent);
   void requestProcessBag(const QString& path);
+  void requestProcessBin(const QString& path);
 
  private:
   BagWorker* bag_worker;

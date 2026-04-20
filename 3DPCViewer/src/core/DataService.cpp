@@ -70,6 +70,8 @@ DataService::DataService(QObject* parent) : QObject(parent) {
           &DatabaseManager::setCurrentDataSource, Qt::QueuedConnection);
   connect(this, &DataService::requestProcessBag, bag_worker,
           &BagWorker::processBag, Qt::QueuedConnection);
+  connect(this, &DataService::requestProcessBin, bag_worker,
+      &BagWorker::processBin, Qt::QueuedConnection);
 
   if (!worker_thread->isRunning()) {
     worker_thread->start();
@@ -89,6 +91,11 @@ void DataService::startProcess(const QString& path) {
     emit requestInitializeDb(path);
     emit requestProcessBag(path);
   }
+}
+void DataService::startProcessBin(const QString& path) {
+    if (bag_worker) {
+        emit requestProcessBin(path);
+    }
 }
 
 void DataService::updateProgress(const int value) {
