@@ -36,8 +36,8 @@ void StatusWidget::onUpdateTopicList(const TopicTreeData& all_topics) {
     const auto& origins = bag_it.value();
     for (auto origin_it = origins.begin(); origin_it != origins.end(); ++origin_it) {
       QString origin_name = origin_it.key();
-      QString display_name = origin_name == "raw" ? "原始传感器数据 (" + origin_name + ")" 
-                                                  : "SLAM 结果: " + origin_name;
+      QString display_name = origin_name == "raw" ? "raw (" + origin_name + ")" 
+                                                  : "SLAM: " + origin_name;
       QStandardItem* group_item = new QStandardItem(display_name);
       group_item->setEditable(false);
       group_item->setSelectable(false);

@@ -115,6 +115,19 @@
     </widget>
    </item>
    <item>
+    <widget class="QWidget" name="widget_9" native="true">
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <widget class="QPushButton" name="pB_export_cmp">
+        <property name="text">
+         <string>导出colmap</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QWidget" name="widget_4" native="true">
      <layout class="QHBoxLayout" name="horizontalLayout_4">
       <item>

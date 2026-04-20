@@ -3,7 +3,7 @@ project(mock_slam_node LANGUAGES CXX)
 
 add_executable(mock_slam_node
     main.cpp
-)
+ )
 
 target_include_directories(mock_slam_node PRIVATE
     ${CMAKE_SOURCE_DIR}/src/slam

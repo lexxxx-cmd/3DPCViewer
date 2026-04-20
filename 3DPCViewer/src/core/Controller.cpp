@@ -75,6 +75,32 @@ void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_previ
     } else {
        qDebug() << "Failed to start mock_slam.exe";
     }
+  } else if (algorithm == "ORBSLAM3") {
+        QString exe_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/x64/Release/slam.exe";
+        QString mode_path = "mono_inertial_tum_vi";
+        QString vocab_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/Vocabulary/ORBvoc.bin";
+        QString settings_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/Examples/Monocular-Inertial/EuRoc.yaml";
+
+        QStringList args;
+        args << mode_path << vocab_path << settings_path;
+
+        bool ok = slam_manager->startAlgorithm(exe_path, args, "tcp://127.0.0.1:5555");
+        if (ok) {
+           qDebug() << "ORB-SLAM3 process started! Initializing Real DB Stream and forcing start...";
+           bool stream_ok = false;
+           QMetaObject::invokeMethod(data_service->getDbManager(), "initSlamStream", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, stream_ok));
+
+           if (stream_ok) {
+               QTimer::singleShot(1000, this, [this](){
+                 slam_manager->sendStartCommand({QByteArray("RealBagUUID"), QByteArray("ORBSLAM3_CONFIG")});
+               });
+           } else {
+               qDebug() << "Failed to init SQL Stream for ORB-SLAM3!";
+               slam_manager->stopAlgorithm();
+           }
+        } else {
+           qDebug() << "Failed to start ORB-SLAM3 executable at:" << exe_path;
+        }
   } else {
     qDebug() << "Unknown SLAM Algorithm:" << algorithm;
   }
@@ -119,9 +145,9 @@ void Controller::handleSlamResponse(slam::net::Command cmd, const QList<QByteArr
         }
 
         QByteArray ts_bytes = QString::number(timestamp).toUtf8();
-        // Using existing payload mechanism; usually we'd pass topic, ts, payload
-        // For now pass ts and full payload block 
-        QList<QByteArray> parts = { ts_bytes, payload };
+        QByteArray topic_bytes = topic.toUtf8();
+        // Using existing payload mechanism; pass ts, topic, payload
+        QList<QByteArray> parts = { ts_bytes, topic_bytes, payload };
         slam_manager->sendFrameCommand(parts);
     }
   }
