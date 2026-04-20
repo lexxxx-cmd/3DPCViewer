@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QProcess>
 #include "slam/SlamNetProtocol.h"
 
 Controller::Controller(QObject* parent) : QObject(parent) {
@@ -68,6 +69,38 @@ void Controller::handleExportColmapRequest() {
       QString("Ready to export database [%1] - [%2].\n"
               "This string serves as a placeholder for kicking off ColmapExporter.")
               .arg(bag_uuid).arg(origin_name));
+
+  // Task 1.3: Start ColmapExporter process
+  QProcess* exporter_process = new QProcess(this);
+  QString exe_path = QCoreApplication::applicationDirPath() + "/ColmapExporter.exe";
+  // The path depends on where CMake outputs the tools binaries. 
+  // We can also try a relative path if it's in the build tree.
+  if (!QFileInfo::exists(exe_path)) {
+      exe_path = "E:/C++_pj/repos/3DPCViewer/out/build/x64-Release/3DPCViewer/src/tools/colmap_exporter/ColmapExporter.exe";
+  }
+
+  QStringList args;
+  args << "--zmq-port" << "5567"; // example port
+
+  connect(exporter_process, &QProcess::readyReadStandardOutput, this, [exporter_process]() {
+      qDebug() << "[ColmapExporter Out]:" << exporter_process->readAllStandardOutput().trimmed();
+  });
+  connect(exporter_process, &QProcess::readyReadStandardError, this, [exporter_process]() {
+      qDebug() << "[ColmapExporter Err]:" << exporter_process->readAllStandardError().trimmed();
+  });
+  connect(exporter_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), 
+      this, [exporter_process](int exitCode, QProcess::ExitStatus exitStatus) {
+      qDebug() << "[ColmapExporter] exited with code" << exitCode;
+      exporter_process->deleteLater();
+  });
+
+  exporter_process->start(exe_path, args);
+  if (!exporter_process->waitForStarted(2000)) {
+      qDebug() << "Failed to start ColmapExporter at:" << exe_path;
+      QMessageBox::warning(viewer.get(), "Export Failed", "Failed to start ColmapExporter.exe\nPath: " + exe_path);
+  } else {
+      qDebug() << "Started ColmapExporter successfully. PID:" << exporter_process->processId();
+  }
 }
 
 void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_preview) {
