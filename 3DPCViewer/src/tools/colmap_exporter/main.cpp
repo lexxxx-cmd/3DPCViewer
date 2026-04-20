@@ -26,6 +26,16 @@ struct OdomFrame {
     OdomPose pose;
 };
 
+struct Point3D {
+    float x, y, z;
+    uint8_t r, g, b;
+};
+
+struct CloudFrame {
+    std::string frame_id;
+    std::vector<Point3D> points;
+};
+
 // Thread-safe queue
 class MessageQueue {
 public:
@@ -91,6 +101,94 @@ OdomFrame parseOdomPayload(const uint8_t* payload, size_t length) {
     return odom;
 }
 
+CloudFrame parseSensorPc2Payload(const uint8_t* payload, size_t length) {
+    CloudFrame frame;
+    size_t offset = 0;
+
+    offset += 12; // seq, sec, nsec
+    uint32_t frame_id_len = *(uint32_t*)(payload + offset);
+    offset += 4;
+    frame.frame_id = std::string((const char*)(payload + offset), frame_id_len);
+    offset += frame_id_len;
+
+    uint32_t height = *(uint32_t*)(payload + offset);
+    offset += 4;
+    uint32_t width = *(uint32_t*)(payload + offset);
+    offset += 4;
+    uint32_t point_num = height * width;
+
+    uint32_t fields_size = *(uint32_t*)(payload + offset);
+    offset += 4;
+    struct FieldInfo {
+        std::string name;
+        uint32_t offset;
+        uint8_t datatype;
+        uint32_t count;
+    };
+    std::vector<FieldInfo> fields;
+    for (uint32_t i = 0; i < fields_size; ++i) {
+        uint32_t name_len = *(uint32_t*)(payload + offset);
+        offset += 4;
+        std::string name((const char*)(payload + offset), name_len);
+        offset += name_len;
+        uint32_t field_offset = *(uint32_t*)(payload + offset);
+        offset += 4;
+        uint8_t datatype = *(uint8_t*)(payload + offset);
+        offset += 1;
+        uint32_t count = *(uint32_t*)(payload + offset);
+        offset += 4;
+        fields.push_back({ name, field_offset, datatype, count });
+    }
+
+    bool is_bigendian = *(uint8_t*)(payload + offset);
+    offset += 1;
+    uint32_t point_step = *(uint32_t*)(payload + offset);
+    offset += 4;
+    uint32_t row_step = *(uint32_t*)(payload + offset);
+    offset += 4;
+
+    uint32_t data_len = *(uint32_t*)(payload + offset);
+    offset += 4;
+    const uint8_t* data_ptr = payload + offset;
+    offset += data_len;
+
+    bool is_dense = *(uint8_t*)(payload + offset);
+    offset += 1;
+
+    int x_idx = -1, y_idx = -1, z_idx = -1, rgb_idx = -1;
+    for (size_t i = 0; i < fields.size(); ++i) {
+        if (fields[i].name == "x") x_idx = i;
+        if (fields[i].name == "y") y_idx = i;
+        if (fields[i].name == "z") z_idx = i;
+        if (fields[i].name == "rgb" || fields[i].name == "rgba") rgb_idx = i;
+    }
+
+    if (data_len < point_num * point_step) {
+        point_num = data_len / point_step;
+    }
+
+    frame.points.resize(point_num);
+    for (uint32_t i = 0; i < point_num; ++i) {
+        size_t base = i * point_step;
+        if (x_idx >= 0) frame.points[i].x = *(float*)(data_ptr + base + fields[x_idx].offset);
+        if (y_idx >= 0) frame.points[i].y = *(float*)(data_ptr + base + fields[y_idx].offset);
+        if (z_idx >= 0) frame.points[i].z = *(float*)(data_ptr + base + fields[z_idx].offset);
+
+        if (rgb_idx >= 0) {
+            const uint8_t* color_ptr = data_ptr + base + fields[rgb_idx].offset;
+            frame.points[i].b = color_ptr[0];
+            frame.points[i].g = color_ptr[1];
+            frame.points[i].r = color_ptr[2];
+        } else {
+            frame.points[i].r = 255;
+            frame.points[i].g = 255;
+            frame.points[i].b = 255;
+        }
+    }
+
+    return frame;
+}
+
 // Global queue
 MessageQueue g_queue;
 
@@ -137,6 +235,7 @@ int main(int argc, char** argv)
         std::thread receiver_thread(receiver_thread_func, port);
         
         int odom_count = 0;
+        int pcd_count = 0;
         
         while (true) {
             ZmqMessage msg;
@@ -157,11 +256,26 @@ int main(int argc, char** argv)
                 }
                 odom_count++;
             }
-            // Handle [PCD] logic in future
+            else if (msg.header == "[PCD]") {
+                CloudFrame cloud = parseSensorPc2Payload(msg.payload.data(), msg.payload.size());
+                
+                if (pcd_count < 5) { // Just print first few frames to verify
+                    std::cout << "[ColmapExporter] Handled PCD Frame " << pcd_count + 1 
+                              << " | Frame ID: " << cloud.frame_id 
+                              << " | Extracted Points: " << cloud.points.size() 
+                              << std::endl;
+                }
+                pcd_count++;
+            }
         }
         
         receiver_thread.join();
         std::cout << "[ColmapExporter] Processed " << odom_count << " ODOM frames." << std::endl;
+        std::cout << "[ColmapExporter] Processed " << pcd_count << " PCD frames." << std::endl;
         return 0;
     }
+
+
+    printf("ORB-SLAM3");
+    return 0;
 }
