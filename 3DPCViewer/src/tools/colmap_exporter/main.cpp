@@ -7,6 +7,9 @@
 #include <string>
 #include <cstring>
 #include <zmq.hpp>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 // Define structures needed for parsing
 struct ZmqMessage {
@@ -237,6 +240,10 @@ int main(int argc, char** argv)
         int odom_count = 0;
         int pcd_count = 0;
         
+        // Remove old files
+        std::remove("images.bin");
+        std::remove("points3D.bin");
+        
         while (true) {
             ZmqMessage msg;
             g_queue.pop(msg);
@@ -248,6 +255,57 @@ int main(int argc, char** argv)
             if (msg.header == "[ODOM]") {
                 OdomFrame odom = parseOdomPayload(msg.payload.data(), msg.payload.size());
                 
+                // Convert C2W to W2C
+                double qx = odom.pose.qx, qy = odom.pose.qy, qz = odom.pose.qz, qw = odom.pose.qw;
+                double tx = odom.pose.x, ty = odom.pose.y, tz = odom.pose.z;
+
+                // Rotation matrix R_C2W from quaternion
+                double R00 = 1.0 - 2.0 * (qy*qy + qz*qz);
+                double R01 = 2.0 * (qx*qy - qz*qw);
+                double R02 = 2.0 * (qx*qz + qy*qw);
+                double R10 = 2.0 * (qx*qy + qz*qw);
+                double R11 = 1.0 - 2.0 * (qx*qx + qz*qz);
+                double R12 = 2.0 * (qy*qz - qx*qw);
+                double R20 = 2.0 * (qx*qz - qy*qw);
+                double R21 = 2.0 * (qy*qz + qx*qw);
+                double R22 = 1.0 - 2.0 * (qx*qx + qy*qy);
+
+                // t_W2C = -R_C2W^T * t_C2W
+                double t_w2c_x = -(R00 * tx + R10 * ty + R20 * tz);
+                double t_w2c_y = -(R01 * tx + R11 * ty + R21 * tz);
+                double t_w2c_z = -(R02 * tx + R12 * ty + R22 * tz);
+
+                // q_W2C is conjugate of q_C2W
+                double q_w2c_w = qw, q_w2c_x = -qx, q_w2c_y = -qy, q_w2c_z = -qz;
+
+                // Write to images.bin
+                uint32_t image_id = odom_count + 1;
+                uint32_t camera_id = 1;
+                uint64_t points2d_size = 0;
+
+                // Name: 1774599813.6.jpg from 1774599813 and 667775041 (stamp.sec + '.' + first digit of nsec)
+                uint32_t sec = odom.timestamp / 1000000000ULL;
+                uint32_t nsec = odom.timestamp % 1000000000ULL;
+                std::stringstream ss;
+                ss << sec << "." << (nsec / 100000000) << ".jpg";
+                std::string name = ss.str();
+
+                std::ofstream ofs("images.bin", std::ios::binary | std::ios::app);
+                if (ofs.is_open()) {
+                    ofs.write((char*)&image_id, sizeof(uint32_t));
+                    ofs.write((char*)&q_w2c_w, sizeof(double));
+                    ofs.write((char*)&q_w2c_x, sizeof(double));
+                    ofs.write((char*)&q_w2c_y, sizeof(double));
+                    ofs.write((char*)&q_w2c_z, sizeof(double));
+                    ofs.write((char*)&t_w2c_x, sizeof(double));
+                    ofs.write((char*)&t_w2c_y, sizeof(double));
+                    ofs.write((char*)&t_w2c_z, sizeof(double));
+                    ofs.write((char*)&camera_id, sizeof(uint32_t));
+                    ofs.write(name.c_str(), name.length() + 1); // include '\0'
+                    ofs.write((char*)&points2d_size, sizeof(uint64_t));
+                    ofs.close();
+                }
+
                 if (odom_count < 5) {
                     std::cout << "[ColmapExporter] Handled ODOM Frame " << odom_count + 1 
                               << " | Timestamp: " << odom.timestamp 
