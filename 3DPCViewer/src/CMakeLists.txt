@@ -36,3 +36,6 @@ add_subdirectory(ui)
 add_subdirectory(node)
 add_subdirectory(osgQOpenGL)
 add_subdirectory(slam)
+add_subdirectory(tools/colmap_exporter)
+ 
+ 

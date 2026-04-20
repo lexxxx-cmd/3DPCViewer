@@ -20,6 +20,7 @@ class Controller : public QObject {
 
  private slots:
   void handleRunSlamRequest(const QString& algorithm, bool is_rt_preview);
+  void handleExportColmapRequest();
   void handleSlamResponse(slam::net::Command cmd, const QList<QByteArray>& parts);
   void handleNextSlamFrame(const QString& topic, const QByteArray& payload, qint64 timestamp);
 

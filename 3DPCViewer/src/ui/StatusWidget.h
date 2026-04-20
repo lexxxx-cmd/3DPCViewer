@@ -23,6 +23,9 @@ class StatusWidget : public QWidget {
   void onUpdateTopicList(const TopicTreeData& topics);
   void onTopicStateChanged(QStandardItem* item);
 
+  public:
+   bool checkColmapExportConditions(QString& out_bag_uuid, QString& out_origin_name);
+
  signals:
   void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
 

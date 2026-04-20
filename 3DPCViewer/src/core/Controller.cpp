@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QMessageBox>
 #include "slam/SlamNetProtocol.h"
 
 Controller::Controller(QObject* parent) : QObject(parent) {
@@ -33,6 +34,7 @@ void Controller::setup_connections() {
   connect(data_service.get(), &DataService::messageNumReady, viewer.get(), &PCViewer::messageNumReady);
 
   connect(viewer.get(), &PCViewer::requestRunSlam, this, &Controller::handleRunSlamRequest);
+  connect(viewer.get(), &PCViewer::requestExportColmap, this, &Controller::handleExportColmapRequest);
   connect(viewer.get(), &PCViewer::requestSetCurrentDataSource, data_service.get(), &DataService::requestSetCurrentDataSource);
 
   connect(slam_manager.get(), &slam::SLAMNodeManager::nodeOutputReceived, this, [](const QString& msg){
@@ -46,6 +48,26 @@ void Controller::setup_connections() {
      qDebug() << "SLAM Stream exhausted, sending CMD_FINISH";
      slam_manager->sendFinishCommand({});
   });
+}
+
+void Controller::handleExportColmapRequest() {
+  QString bag_uuid, origin_name;
+  bool ok = viewer->getControlPanel()->getStatusWidget()->checkColmapExportConditions(bag_uuid, origin_name);
+
+  if (!ok) {
+    QMessageBox::warning(viewer.get(), "Export Failed", 
+        "Cannot export to COLMAP format.\n\n"
+        "Please ensure you have selected a data group that contains both:\n"
+        "- /aft_mapped_to_init\n"
+        "- /cloud_registered_rgb\n"
+        "and that at least one of its topics is checked.");
+    return;
+  }
+
+  QMessageBox::information(viewer.get(), "Export Ready", 
+      QString("Ready to export database [%1] - [%2].\n"
+              "This string serves as a placeholder for kicking off ColmapExporter.")
+              .arg(bag_uuid).arg(origin_name));
 }
 
 void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_preview) {

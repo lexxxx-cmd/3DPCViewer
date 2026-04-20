@@ -23,6 +23,8 @@ ControlPanelWidget::ControlPanelWidget(QWidget* parent) : QWidget(parent) {
           &ControlPanelWidget::bgColorChanged);
   connect(ui->InterWidget, &InteractionWidget::requestRunSlam, this,
           &ControlPanelWidget::requestRunSlam);
+  connect(ui->InterWidget, &InteractionWidget::requestExportColmap, this,
+          &ControlPanelWidget::requestExportColmap);
   connect(ui->StatusW, &StatusWidget::requestSetCurrentDataSource, this,
           &ControlPanelWidget::requestSetCurrentDataSource);
 }

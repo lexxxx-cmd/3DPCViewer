@@ -116,5 +116,44 @@ void StatusWidget::onTopicStateChanged(QStandardItem* item) {
   }
 }
 
+bool StatusWidget::checkColmapExportConditions(QString& out_bag_uuid, QString& out_origin_name) {
+  if (!topic_model) return false;
+
+  for (int b = 0; b < topic_model->rowCount(); ++b) {
+      QStandardItem* bag_node = topic_model->item(b);
+      if (!bag_node) continue;
+
+      for (int o = 0; o < bag_node->rowCount(); ++o) {
+          QStandardItem* origin_node = bag_node->child(o);
+          if (!origin_node) continue;
+
+          bool hasChecked = false;
+          bool hasAftMapped = false;
+          bool hasCloud = false;
+
+          for (int t = 0; t < origin_node->rowCount(); ++t) {
+              QStandardItem* target_topic = origin_node->child(t);
+              if (!target_topic) continue;
+
+              if (target_topic->checkState() == Qt::Checked) {
+                  hasChecked = true;
+                  out_bag_uuid = target_topic->data(Qt::UserRole + 2).toString();
+                  out_origin_name = target_topic->data(Qt::UserRole + 1).toString();
+              }
+
+              QString topic_text = target_topic->text();
+              if (topic_text == "/aft_mapped_to_init") hasAftMapped = true;
+              if (topic_text == "/cloud_registered_rgb") hasCloud = true;
+          }
+
+          if (hasChecked) {
+              return hasAftMapped && hasCloud;
+          }
+      }
+  }
+
+  return false;
+}
+
 
 

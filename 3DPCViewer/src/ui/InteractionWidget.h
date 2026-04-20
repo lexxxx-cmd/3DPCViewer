@@ -31,6 +31,7 @@ class InteractionWidget : public QWidget {
   void progressUpdated(const int value);
   void bgColorChanged(const QColor& color);
   void requestRunSlam(const QString& algorithm, bool is_rt_preview);
+  void requestExportColmap();
 
  private:
   std::unique_ptr<Ui::InteractionWidgetClass> ui;
@@ -39,5 +40,7 @@ class InteractionWidget : public QWidget {
   int cur_message_num = 0;
   bool is_play = false;
 };
+
+
 
 

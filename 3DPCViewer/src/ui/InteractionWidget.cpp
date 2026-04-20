@@ -92,6 +92,12 @@ InteractionWidget::InteractionWidget(QWidget* parent) : QWidget(parent) {
     });
   }
 
+  if (ui->pB_export_cmp) {
+    connect(ui->pB_export_cmp, &QPushButton::clicked, this, [this]() {
+      emit requestExportColmap();
+    });
+  }
+
   onSizeSliderChanged(ui->HSlider_size->value());
   onOpacitySliderChanged(ui->HSlider_opacity->value());
 }
