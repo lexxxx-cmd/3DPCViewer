@@ -35,6 +35,7 @@ class DataService : public QObject {
 
   // Internal signals for cross-thread communication (replacing invokeMethod)
   void requestInitializeDb(const QString& bag_path);
+  void requestExportColmapStream(const QString& bag_uuid, const QString& origin_name, int zmq_port);
   void requestFetchNextSlamFrame();
   void requestFetchTopicList();
   void requestInsertTopic(const QString& bag_uuid, const QString& topic_name,

@@ -100,6 +100,7 @@ void Controller::handleExportColmapRequest() {
       QMessageBox::warning(viewer.get(), "Export Failed", "Failed to start ColmapExporter.exe\nPath: " + exe_path);
   } else {
       qDebug() << "Started ColmapExporter successfully. PID:" << exporter_process->processId();
+      emit data_service->requestExportColmapStream(bag_uuid, origin_name, 5567);
   }
 }
 

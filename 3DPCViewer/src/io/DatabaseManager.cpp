@@ -3,6 +3,7 @@
 #include <QUuid>
 #include <QDebug>
 #include <QFileInfo>
+#include <zmq.hpp>
 
 DatabaseManager::DatabaseManager(QObject* parent) : QObject(parent) {
     // Thread management is handled by DataService
@@ -266,6 +267,68 @@ void DatabaseManager::stopSlamStream() {
     if (slam_stream_query) {
         slam_stream_query->finish();
         slam_stream_query.reset();
+    }
+}
+
+void DatabaseManager::exportColmapStream(const QString& bag_uuid, const QString& origin_name, int zmq_port) {
+    if (!db.isOpen()) return;
+
+    QString odom_table;
+    QString pcd_table;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT topic_name, dynamic_table_name FROM origin WHERE bag_uuid = ? AND origin_name = ? AND topic_name IN ('/aft_mapped_to_init', '/cloud_registered_rgb')");
+    q.addBindValue(bag_uuid);
+    q.addBindValue(origin_name);
+    if(q.exec()) {
+        while(q.next()) {
+            QString topic = q.value(0).toString();
+            if(topic == "/aft_mapped_to_init") odom_table = q.value(1).toString();
+            else if(topic == "/cloud_registered_rgb") pcd_table = q.value(1).toString();
+        }
+    }
+
+    if(odom_table.isEmpty() || pcd_table.isEmpty()) {
+        emit errorOccurred("Missing required topics for COLMAP export.");
+        return;
+    }
+
+    qDebug() << "[DatabaseManager] Starting COLMAP export ZMQ Stream on port " << zmq_port;
+    try {
+        zmq::context_t ctx(1);
+        zmq::socket_t push_sock(ctx, zmq::socket_type::push);
+        QString endpoint = QString("tcp://*:%1").arg(zmq_port);
+        push_sock.bind(endpoint.toStdString());
+
+        auto sendData = [&](const QString& topic, const QString& table, const QString& header) {
+            QSqlQuery fetch_q(db);
+            fetch_q.setForwardOnly(true);
+            fetch_q.prepare(QString("SELECT data FROM %1 ORDER BY timestamp ASC").arg(table));
+            if(fetch_q.exec()) {
+                int i = 0;
+                while(fetch_q.next()) {
+                    QByteArray payload = fetch_q.value(0).toByteArray();
+                    
+                    zmq::message_t msg_head(header.toStdString().data(), header.size());
+                    push_sock.send(msg_head, zmq::send_flags::sndmore);
+                    
+                    zmq::message_t msg_body(payload.data(), payload.size());
+                    push_sock.send(msg_body, zmq::send_flags::none);
+                    qDebug() << i++;
+                }
+            }
+        };
+
+        sendData("/aft_mapped_to_init", odom_table, "[ODOM]");
+        sendData("/cloud_registered_rgb", pcd_table, "[PCD]");
+
+        // [EOF]
+        zmq::message_t eof_msg("[EOF]", 5);
+        push_sock.send(eof_msg, zmq::send_flags::none);
+        
+        qDebug() << "[DatabaseManager] Export stream finished.";
+    } catch (const zmq::error_t& e) {
+        emit errorOccurred(QString("ZMQ Bind Error: %1").arg(e.what()));
     }
 }
 
