@@ -91,19 +91,24 @@ void BagWorker::processBag(const QString& bag_path) {
 void BagWorker::processBin(const QString& bin_path) {
     std::ifstream file(bin_path.toStdString(), std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "�޷����ļ�: " << bin_path.toStdString() << std::endl;
+        // 修复中文乱码
+        std::cerr << "无法打开文件: " << bin_path.toStdString() << std::endl;
         return;
     }
 
-    // ��ȡ�ļ��������ж�
     QFileInfo fileInfo(bin_path);
     QString fileName = fileInfo.fileName();
 
     if (fileName.startsWith("images")) {
-        // ======================== �߼� A: ���� images.bin (���λ��) ========================
         uint64_t num_images;
         ReadBinaryLittleEndian(&file, &num_images);
-        std::cout << "���ڴ��� images.bin, ��ͼ����: " << num_images << std::endl;
+        std::cout << "images.bin: " << num_images << std::endl;
+
+        // 定义统一的坐标系转换矩阵: 绕X轴旋转-90度 (COLMAP -> OSG)
+        Eigen::Matrix3d Rx_m90;
+        Rx_m90 << 1, 0, 0,
+            0, 0, 1,
+            0, -1, 0;
 
         for (size_t i = 0; i < num_images; ++i) {
             uint32_t image_id;
@@ -121,23 +126,29 @@ void BagWorker::processBin(const QString& bin_path) {
             uint32_t camera_id;
             ReadBinaryLittleEndian(&file, &camera_id);
 
+            // 读取字符串 (小优化：虽然还是单字符循环，但预先分配避免频繁扩容)
             std::string name;
+            name.reserve(64);
             char name_char;
-            while (file.read(&name_char, 1) && name_char != '\0') name += name_char;
+            while (file.read(&name_char, 1) && name_char != '\0') {
+                name += name_char;
+            }
 
-            // 变换逻辑: World-to-Camera -> Camera-to-World (获取相机坐标系位置)
+            // --- 核心变换逻辑 ---
             Eigen::Quaterniond q(qw, qx, qy, qz);
             Eigen::Matrix3d R = q.toRotationMatrix();
             Eigen::Vector3d t(tx, ty, tz);
-            Eigen::Vector3d camera_center = -R.transpose() * t;
-            Eigen::Matrix3d Rx_m90;
-            Rx_m90 << 1, 0, 0,
-                0, 0, 1,
-                0, -1, 0;
 
-            // 变换位置和旋转
+            // 1. 获取 COLMAP 坐标系下的 C2W 位置
+            Eigen::Vector3d camera_center = -R.transpose() * t;
+
+            // 2. 将位置转换到 OSG 坐标系
             Eigen::Vector3d camera_center_osg = Rx_m90 * camera_center;
-            Eigen::Matrix3d R_osg = Rx_m90 * R;
+
+            // 3. 将姿态转换到 OSG 坐标系
+            // 原始 R.transpose() 是 COLMAP 坐标系下的 C2W 旋转
+            // 左乘 Rx_m90 代表在新的世界坐标系下描述该相机的朝向
+            Eigen::Matrix3d R_osg = Rx_m90 * R.transpose();
             Eigen::Quaterniond q_osg(R_osg);
 
             // 跳过 2D 点数据
@@ -145,56 +156,53 @@ void BagWorker::processBin(const QString& bin_path) {
             ReadBinaryLittleEndian(&file, &num_points2D);
             file.seekg(num_points2D * 24, std::ios::cur);
 
-            // 封装数据
+            // 封装数据 (统一使用转换后的 osg 变量)
             OdomFrame Frame;
-            Frame.timestamp = i;
+            Frame.timestamp = i; // 或者 image_id
             Frame.index = i;
             Frame.pose.qw = q_osg.w();
             Frame.pose.qx = q_osg.x();
             Frame.pose.qy = q_osg.y();
             Frame.pose.qz = q_osg.z();
-            Frame.pose.x = camera_center.x();
-            Frame.pose.y = camera_center.z();
-            Frame.pose.z = -camera_center.y();
+            Frame.pose.x = camera_center_osg.x();
+            Frame.pose.y = camera_center_osg.y();
+            Frame.pose.z = camera_center_osg.z();
             emit odomFrameReady(Frame);
         }
     }
     else if (fileName.startsWith("points3D")) {
-        // ======================== �߼� B: ���� points3D.bin (�ռ����) ========================
         uint64_t num_points3D;
         ReadBinaryLittleEndian(&file, &num_points3D);
-        std::cout << "���ڴ��� points3D.bin, �ܵ���: " << num_points3D << std::endl;
+        std::cout << "正在处理 points3D.bin, 总点数: " << num_points3D << std::endl;
+
         GeneralCloudFrame Frame;
         Frame.points.resize(num_points3D);
         Frame.frame_id = "1";
         Frame.timestamp = 1;
+
         for (size_t i = 0; i < num_points3D; ++i) {
             uint64_t point3D_id;
             ReadBinaryLittleEndian(&file, &point3D_id);
 
-            // ��ȡ XYZ ����
             double x, y, z;
             ReadBinaryLittleEndian(&file, &x);
             ReadBinaryLittleEndian(&file, &y);
             ReadBinaryLittleEndian(&file, &z);
 
-            // ��ȡ RGB ��ɫ
             uint8_t r, g, b;
             ReadBinaryLittleEndian(&file, &r);
             ReadBinaryLittleEndian(&file, &g);
             ReadBinaryLittleEndian(&file, &b);
 
-            // ��ȡ��ͶӰ���
             double error;
             ReadBinaryLittleEndian(&file, &error);
 
-            // ���� Track �켣���� (track_len * 8 �ֽ�)
             uint64_t track_len;
             ReadBinaryLittleEndian(&file, &track_len);
             file.seekg(track_len * 8, std::ios::cur);
 
             // COLMAP坐标系 -> OSG坐标系: 绕X轴旋转-90度
-            // x_osg = x, y_osg = z, z_osg = -y
+            // 这里手工映射是对的，因为运算非常简单没必要用 Eigen，性能更好
             Frame.points[i].point_i.x = static_cast<float>(x);
             Frame.points[i].point_i.y = static_cast<float>(z);
             Frame.points[i].point_i.z = -static_cast<float>(y);
@@ -202,8 +210,7 @@ void BagWorker::processBin(const QString& bin_path) {
             Frame.points[i].g = g;
             Frame.points[i].b = b;
         }
-        
-        //  OdomFrame ֧ɫԶ⸳ֵλڿӻ
+
         emit cloudFrameReady(Frame);
     }
 
