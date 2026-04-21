@@ -10,6 +10,10 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/filter.h>
 
 // Define structures needed for parsing
 struct ZmqMessage {
@@ -29,15 +33,8 @@ struct OdomFrame {
     OdomPose pose;
 };
 
-struct Point3D {
-    float x, y, z;
-    uint8_t r, g, b;
-};
-
-struct CloudFrame {
-    std::string frame_id;
-    std::vector<Point3D> points;
-};
+using PointT = pcl::PointXYZRGB;
+using PointCloud = pcl::PointCloud<PointT>;
 
 // Thread-safe queue
 class MessageQueue {
@@ -104,14 +101,15 @@ OdomFrame parseOdomPayload(const uint8_t* payload, size_t length) {
     return odom;
 }
 
-CloudFrame parseSensorPc2Payload(const uint8_t* payload, size_t length) {
-    CloudFrame frame;
+PointCloud::Ptr parseSensorPc2Payload(const uint8_t* payload, size_t length) {
+    PointCloud::Ptr cloud(new PointCloud());
     size_t offset = 0;
 
     offset += 12; // seq, sec, nsec
     uint32_t frame_id_len = *(uint32_t*)(payload + offset);
     offset += 4;
-    frame.frame_id = std::string((const char*)(payload + offset), frame_id_len);
+    std::string frame_id = std::string((const char*)(payload + offset), frame_id_len);
+
     offset += frame_id_len;
 
     uint32_t height = *(uint32_t*)(payload + offset);
@@ -170,26 +168,30 @@ CloudFrame parseSensorPc2Payload(const uint8_t* payload, size_t length) {
         point_num = data_len / point_step;
     }
 
-    frame.points.resize(point_num);
+    cloud->points.resize(point_num);
     for (uint32_t i = 0; i < point_num; ++i) {
         size_t base = i * point_step;
-        if (x_idx >= 0) frame.points[i].x = *(float*)(data_ptr + base + fields[x_idx].offset);
-        if (y_idx >= 0) frame.points[i].y = *(float*)(data_ptr + base + fields[y_idx].offset);
-        if (z_idx >= 0) frame.points[i].z = *(float*)(data_ptr + base + fields[z_idx].offset);
+        if (x_idx >= 0) cloud->points[i].x = *(float*)(data_ptr + base + fields[x_idx].offset);
+        if (y_idx >= 0) cloud->points[i].y = *(float*)(data_ptr + base + fields[y_idx].offset);
+        if (z_idx >= 0) cloud->points[i].z = *(float*)(data_ptr + base + fields[z_idx].offset);
 
         if (rgb_idx >= 0) {
             const uint8_t* color_ptr = data_ptr + base + fields[rgb_idx].offset;
-            frame.points[i].b = color_ptr[0];
-            frame.points[i].g = color_ptr[1];
-            frame.points[i].r = color_ptr[2];
+            cloud->points[i].b = color_ptr[0];
+            cloud->points[i].g = color_ptr[1];
+            cloud->points[i].r = color_ptr[2];
         } else {
-            frame.points[i].r = 255;
-            frame.points[i].g = 255;
-            frame.points[i].b = 255;
+            cloud->points[i].r = 255;
+            cloud->points[i].g = 255;
+            cloud->points[i].b = 255;
         }
     }
 
-    return frame;
+    cloud->width = point_num;
+    cloud->height = 1;
+    cloud->is_dense = false;
+
+    return cloud;
 }
 
 // Global queue
@@ -239,11 +241,55 @@ int main(int argc, char** argv)
         
         int odom_count = 0;
         int pcd_count = 0;
-        
+
+        PointCloud::Ptr global_cloud(new PointCloud());
+        PointCloud::Ptr temp_downsampled_cloud(new PointCloud());
+        float voxel_size = 0.05f;
+        pcl::VoxelGrid<PointT> vg;
+        vg.setLeafSize(voxel_size, voxel_size, voxel_size);
+
         // Remove old files
         std::remove("images.bin");
         std::remove("points3D.bin");
         
+        // 先写入占位的 num_images (稍后回填)
+        uint64_t placeholder = 0;
+        std::ofstream ofs_init("images.bin", std::ios::binary);
+        ofs_init.write((char*)&placeholder, sizeof(uint64_t));
+        ofs_init.close();
+        const int32_t camera_id = 1;
+        const int32_t camera_model_id = 2;         // OPENCV 模型ID = 2
+        const uint64_t image_width = 4896;         // 图像宽度 (根据内参修改)
+        const uint64_t image_height = 3672;        // 图像高度 (根据内参修改)
+        // 8个内参参数：fx, fy, cx, cy, k1, k2, p1, p2
+        const double cam_params[8] = {
+            510.09627,   // fx
+            506.01408,   // fy
+            346.13502,   // cx
+            239.89004,   // cy
+            0.045908,    // k1
+            0.005620,    // k2
+            0.002820,    // p1
+            0.008550     // p2
+        };
+
+        // 写入 cameras.bin (一次性写入，固定相机参数)
+        std::ofstream ofs_camera("cameras.bin", std::ios::binary);
+        if (ofs_camera.is_open()) {
+            const uint64_t num_cameras = 1;
+            ofs_camera.write((char*)&num_cameras, sizeof(uint64_t));
+
+            ofs_camera.write((char*)&camera_id, sizeof(int32_t));
+            ofs_camera.write((char*)&camera_model_id, sizeof(int32_t));
+            ofs_camera.write((char*)&image_width, sizeof(uint64_t));
+            ofs_camera.write((char*)&image_height, sizeof(uint64_t));
+
+            for (int i = 0; i < 8; ++i) {
+                ofs_camera.write((char*)&cam_params[i], sizeof(double));
+            }
+            ofs_camera.close();
+            std::cout << "[ColmapExporter] cameras.bin completed!" << std::endl;
+        }
         while (true) {
             ZmqMessage msg;
             g_queue.pop(msg);
@@ -315,19 +361,102 @@ int main(int argc, char** argv)
                 odom_count++;
             }
             else if (msg.header == "[PCD]") {
-                CloudFrame cloud = parseSensorPc2Payload(msg.payload.data(), msg.payload.size());
-                
+                PointCloud::Ptr cloud = parseSensorPc2Payload(msg.payload.data(), msg.payload.size());
+
+                // 移除 NaN，并截断极端异常值点，防止 PCL VoxelGrid 计算包围盒时整型溢出
+                PointCloud::Ptr valid_cloud(new PointCloud());
+                valid_cloud->points.reserve(cloud->points.size());
+                for (const auto& pt : cloud->points) {
+                    if (std::isfinite(pt.x) && std::isfinite(pt.y) && std::isfinite(pt.z) &&
+                        std::abs(pt.x) < 1000.0f && std::abs(pt.y) < 1000.0f && std::abs(pt.z) < 1000.0f) {
+                        valid_cloud->points.push_back(pt);
+                    }
+                }
+                valid_cloud->width = valid_cloud->points.size();
+                valid_cloud->height = 1;
+                valid_cloud->is_dense = true;
+
+                vg.setInputCloud(valid_cloud);
+                vg.filter(*temp_downsampled_cloud);
+
+                *global_cloud += *temp_downsampled_cloud;
+
                 if (pcd_count < 5) { // Just print first few frames to verify
                     std::cout << "[ColmapExporter] Handled PCD Frame " << pcd_count + 1 
-                              << " | Frame ID: " << cloud.frame_id 
-                              << " | Extracted Points: " << cloud.points.size() 
+                              << " | Extracted Points: " << cloud->size() 
+                              << " | Downsampled: " << temp_downsampled_cloud->size()
                               << std::endl;
                 }
                 pcd_count++;
             }
         }
-        
+
         receiver_thread.join();
+
+        // Final global downsample with adaptive voxel size to hit ~100MB target
+        PointCloud::Ptr final_cloud(new PointCloud());
+        pcl::VoxelGrid<PointT> vg_global;
+        vg_global.setInputCloud(global_cloud);
+
+        float final_voxel_size = voxel_size;
+        // 51 bytes per point in points3D.bin (uint64 + 3x double + 3x uint8 + double + uint64)
+        // 2,000,000 points * 51 bytes ~= 102 MB
+        const size_t TARGET_POINTS = 2000000; 
+
+        vg_global.setLeafSize(final_voxel_size, final_voxel_size, final_voxel_size);
+        vg_global.filter(*final_cloud);
+
+        // Iteratively increase voxel size until the point count drops below the target
+        while (final_cloud->size() > TARGET_POINTS) {
+            final_voxel_size += 0.05f;
+            std::cout << "[ColmapExporter] Global cloud size: " << final_cloud->size() 
+                      << " | Target: " << TARGET_POINTS 
+                      << " | Increasing voxel size to " << final_voxel_size << "m..." << std::endl;
+
+            vg_global.setLeafSize(final_voxel_size, final_voxel_size, final_voxel_size);
+            vg_global.filter(*final_cloud);
+
+            // Fail-safe to avoid infinite loops if cloud doesn't shrink (e.g. huge voxel size limits)
+            if (final_voxel_size > 2.0f) {
+                std::cout << "[ColmapExporter] Voxel size reached 2.0m, stopping adaptive downsample." << std::endl;
+                break;
+            }
+        }
+
+        std::cout << "[ColmapExporter] Final voxel size: " << final_voxel_size << "m" << std::endl;
+        std::cout << "[ColmapExporter] Writing points3D.bin... Total points: " << final_cloud->size() << std::endl;
+
+        std::ofstream ofs_pts("points3D.bin", std::ios::binary);
+        uint64_t num_points = final_cloud->size();
+        ofs_pts.write((char*)&num_points, sizeof(uint64_t));
+
+        uint64_t track_len = 0;
+        double error = 0.0;
+        for (uint64_t i = 0; i < num_points; ++i) {
+            uint64_t point3d_id = i + 1;
+            const auto& pt = final_cloud->points[i];
+            double pt_x = pt.x, pt_y = pt.y, pt_z = pt.z;
+            uint8_t pt_r = pt.r, pt_g = pt.g, pt_b = pt.b;
+
+            ofs_pts.write((char*)&point3d_id, sizeof(uint64_t));
+            ofs_pts.write((char*)&pt_x, sizeof(double));
+            ofs_pts.write((char*)&pt_y, sizeof(double));
+            ofs_pts.write((char*)&pt_z, sizeof(double));
+            ofs_pts.write((char*)&pt_r, sizeof(uint8_t));
+            ofs_pts.write((char*)&pt_g, sizeof(uint8_t));
+            ofs_pts.write((char*)&pt_b, sizeof(uint8_t));
+            ofs_pts.write((char*)&error, sizeof(double));
+            ofs_pts.write((char*)&track_len, sizeof(uint64_t));
+        }
+        ofs_pts.close();
+
+        // 回填 num_images 到文件开头
+        std::fstream ofs_fix("images.bin", std::ios::binary | std::ios::in | std::ios::out);
+        uint64_t final_count = static_cast<uint64_t>(odom_count);
+        ofs_fix.seekp(0, std::ios::beg);
+        ofs_fix.write((char*)&final_count, sizeof(uint64_t));
+        ofs_fix.close();
+        
         std::cout << "[ColmapExporter] Processed " << odom_count << " ODOM frames." << std::endl;
         std::cout << "[ColmapExporter] Processed " << pcd_count << " PCD frames." << std::endl;
         return 0;
