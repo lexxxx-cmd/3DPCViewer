@@ -7,52 +7,108 @@
 #include <osg/PositionAttitudeTransform>
 #include <osg/MatrixTransform>
 #include <osg/LineWidth>
+#include <osg/Program>
+#include <osg/Shader>
 
 class OdomCameraVisualizer {
  public:
-  OdomCameraVisualizer() {
-    root_group_ = new osg::Group();
+     OdomCameraVisualizer() {
+         root_group_ = new osg::Group();
+         local_model_rotation_ = new osg::MatrixTransform();
 
-    local_model_rotation_ = new osg::MatrixTransform();
-    //local_model_rotation_->setMatrix(osg::Matrix::rotate(osg::DegreesToRadians(90.0), osg::Vec3(0, 1, 0)));
+         osg::ref_ptr<osg::Geode> geode = new osg::Geode();
 
-    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
-    osg::ref_ptr<osg::Geometry> pyramid = new osg::Geometry();
+         // ==================== 1. 共享顶点 ====================
+         float half = 0.2f;
+         float height = 0.5f;
+         osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array;
+         vertices->push_back(osg::Vec3(-half, -half, height)); // 0
+         vertices->push_back(osg::Vec3(half, -half, height));  // 1
+         vertices->push_back(osg::Vec3(half, half, height));   // 2
+         vertices->push_back(osg::Vec3(-half, half, height));  // 3
+         vertices->push_back(osg::Vec3(0, 0, 0));              // 4 (光心)
 
-    float half = 0.2f;
-    float height = 0.5f;
-    osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array;
-    vertices->push_back(osg::Vec3(-half, -half, height));
-    vertices->push_back(osg::Vec3(half, -half, height));
-    vertices->push_back(osg::Vec3(half, half, height));
-    vertices->push_back(osg::Vec3(-half, half, height));
-    vertices->push_back(osg::Vec3(0, 0, 0));
-    pyramid->setVertexArray(vertices);
+         // ==================== 2. 绘制面 (半透明蓝) ====================
+         osg::ref_ptr<osg::Geometry> face_geometry = new osg::Geometry();
+         face_geometry->setVertexArray(vertices);
 
-    osg::ref_ptr<osg::DrawElementsUInt> indices = new osg::DrawElementsUInt(osg::PrimitiveSet::LINES);
-    indices->push_back(0); indices->push_back(1);
-    indices->push_back(1); indices->push_back(2);
-    indices->push_back(2); indices->push_back(3);
-    indices->push_back(3); indices->push_back(0);
-    indices->push_back(0); indices->push_back(4);
-    indices->push_back(1); indices->push_back(4);
-    indices->push_back(2); indices->push_back(4);
-    indices->push_back(3); indices->push_back(4);
+         osg::ref_ptr<osg::DrawElementsUInt> face_indices = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES);
+         // 底面
+         face_indices->push_back(0); face_indices->push_back(1); face_indices->push_back(2);
+         face_indices->push_back(0); face_indices->push_back(2); face_indices->push_back(3);
+         /*
+         face_indices->push_back(0); face_indices->push_back(1); face_indices->push_back(4);
+         face_indices->push_back(1); face_indices->push_back(2); face_indices->push_back(4);
+         face_indices->push_back(2); face_indices->push_back(3); face_indices->push_back(4);
+         face_indices->push_back(3); face_indices->push_back(0); face_indices->push_back(4);
+         */
+         face_geometry->addPrimitiveSet(face_indices);
+         
+         // 【修改点】：使用 BIND_PER_VERTEX，为5个顶点分别塞入同一个蓝色
+         osg::ref_ptr<osg::Vec4Array> face_colors = new osg::Vec4Array;
+         for (int i = 0; i < 5; ++i) {
+             face_colors->push_back(osg::Vec4(0.0f, 0.5f, 1.0f, 0.4f));
+         }
+         face_geometry->setColorArray(face_colors, osg::Array::BIND_PER_VERTEX);
 
-    pyramid->addPrimitiveSet(indices);
+         // 开启混合与透明度
+         face_geometry->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON);
+         face_geometry->getOrCreateStateSet()->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
 
-    osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array;
-    colors->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));
-    pyramid->setColorArray(colors, osg::Array::BIND_OVERALL);
+         geode->addDrawable(face_geometry);
 
-    osg::ref_ptr<osg::LineWidth> line_width = new osg::LineWidth(2.0f);
-    pyramid->getOrCreateStateSet()->setAttributeAndModes(line_width, osg::StateAttribute::ON);
-    pyramid->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+         // ==================== 3. 绘制线框 (黄色) ====================
+         osg::ref_ptr<osg::Geometry> line_geometry = new osg::Geometry();
+         line_geometry->setVertexArray(vertices);
 
-    geode->addDrawable(pyramid);
+         osg::ref_ptr<osg::DrawElementsUInt> indices = new osg::DrawElementsUInt(osg::PrimitiveSet::LINES);
+         indices->push_back(0); indices->push_back(1);
+         indices->push_back(1); indices->push_back(2);
+         indices->push_back(2); indices->push_back(3);
+         indices->push_back(3); indices->push_back(0);
+         indices->push_back(0); indices->push_back(4);
+         indices->push_back(1); indices->push_back(4);
+         indices->push_back(2); indices->push_back(4);
+         indices->push_back(3); indices->push_back(4);
+         line_geometry->addPrimitiveSet(indices);
 
-    local_model_rotation_->addChild(geode);
-  }
+         // 【修改点】：使用 BIND_PER_VERTEX，为5个顶点分别塞入同一个黄色
+         osg::ref_ptr<osg::Vec4Array> line_colors = new osg::Vec4Array;
+         for (int i = 0; i < 5; ++i) {
+             line_colors->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));
+         }
+         line_geometry->setColorArray(line_colors, osg::Array::BIND_PER_VERTEX);
+
+         osg::ref_ptr<osg::LineWidth> line_width = new osg::LineWidth(2.0f);
+         line_geometry->getOrCreateStateSet()->setAttributeAndModes(line_width, osg::StateAttribute::ON);
+
+         geode->addDrawable(line_geometry);
+         local_model_rotation_->addChild(geode);
+
+         // ==================== 4. 挂载 Shader (修复了变量声明) ====================
+         // 【修改点】：加上了 attribute 和 uniform 的声明！
+         const char* vertSource =
+             "uniform mat4 osg_ModelViewProjectionMatrix;\n"
+             "attribute vec4 osg_Vertex;\n"
+             "attribute vec4 osg_Color;\n"
+             "varying vec4 v_color;\n"
+             "void main() {\n"
+             "   v_color = osg_Color;\n"
+             "   gl_Position = osg_ModelViewProjectionMatrix * osg_Vertex;\n"
+             "}\n";
+
+         const char* fragSource =
+             "varying vec4 v_color;\n"
+             "void main() {\n"
+             "   gl_FragColor = v_color;\n"
+             "}\n";
+
+         osg::ref_ptr<osg::Program> program = new osg::Program;
+         program->addShader(new osg::Shader(osg::Shader::VERTEX, vertSource));
+         program->addShader(new osg::Shader(osg::Shader::FRAGMENT, fragSource));
+
+         root_group_->getOrCreateStateSet()->setAttributeAndModes(program, osg::StateAttribute::ON);
+     }
 
   ~OdomCameraVisualizer() {}
 
