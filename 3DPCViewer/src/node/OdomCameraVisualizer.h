@@ -11,10 +11,10 @@
 class OdomCameraVisualizer {
  public:
   OdomCameraVisualizer() {
-    pose_transform_ = new osg::PositionAttitudeTransform();
+    root_group_ = new osg::Group();
 
     local_model_rotation_ = new osg::MatrixTransform();
-    local_model_rotation_->setMatrix(osg::Matrix::rotate(osg::DegreesToRadians(90.0), osg::Vec3(0, 1, 0)));
+    //local_model_rotation_->setMatrix(osg::Matrix::rotate(osg::DegreesToRadians(90.0), osg::Vec3(0, 1, 0)));
 
     osg::ref_ptr<osg::Geode> geode = new osg::Geode();
     osg::ref_ptr<osg::Geometry> pyramid = new osg::Geometry();
@@ -42,41 +42,43 @@ class OdomCameraVisualizer {
     pyramid->addPrimitiveSet(indices);
 
     osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array;
-    colors->push_back(osg::Vec4(1.0f, 1.0f, 0.0f, 1.0f));
+    colors->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));
     pyramid->setColorArray(colors, osg::Array::BIND_OVERALL);
 
     osg::ref_ptr<osg::LineWidth> line_width = new osg::LineWidth(2.0f);
     pyramid->getOrCreateStateSet()->setAttributeAndModes(line_width, osg::StateAttribute::ON);
+    pyramid->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
     geode->addDrawable(pyramid);
 
     local_model_rotation_->addChild(geode);
-    pose_transform_->addChild(local_model_rotation_);
   }
 
   ~OdomCameraVisualizer() {}
 
-  osg::ref_ptr<osg::PositionAttitudeTransform> getRootNode() { return pose_transform_; }
+  osg::ref_ptr<osg::Group> getRootNode() { return root_group_; }
 
   void updatePose(double x, double y, double z,
                   double qx, double qy, double qz, double qw) {
-    if (!pose_transform_) return;
+    if (!root_group_) return;
 
-    pose_transform_->setNodeMask(0xffffffff);
-    pose_transform_->setPosition(osg::Vec3d(x, y, z));
+    osg::ref_ptr<osg::PositionAttitudeTransform> pose_transform = new osg::PositionAttitudeTransform();
+    pose_transform->setPosition(osg::Vec3d(x, y, z));
 
     osg::Quat quat(qx, qy, qz, qw);
-    pose_transform_->setAttitude(quat);
+    pose_transform->setAttitude(quat);
+
+    pose_transform->addChild(local_model_rotation_);
+    root_group_->addChild(pose_transform);
   }
 
   void clear() {
-    if (pose_transform_) {
-      pose_transform_->setNodeMask(0);
-      pose_transform_->setPosition(osg::Vec3d(0, 0, 0));
+    if (root_group_) {
+      root_group_->removeChildren(0, root_group_->getNumChildren());
     }
   }
 
  private:
-  osg::ref_ptr<osg::PositionAttitudeTransform> pose_transform_;
+  osg::ref_ptr<osg::Group> root_group_;
   osg::ref_ptr<osg::MatrixTransform> local_model_rotation_;
 };
