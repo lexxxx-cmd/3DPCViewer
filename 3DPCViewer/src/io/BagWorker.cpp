@@ -201,10 +201,10 @@ void BagWorker::processBin(const QString& bin_path) {
             Frame.points[i].r = r;
             Frame.points[i].g = g;
             Frame.points[i].b = b;
-
-            // ������ OdomFrame ֧����ɫ�����Զ��⸳ֵ���������������λ�����ڿ��ӻ�
-            emit cloudFrameReady(Frame);
         }
+        
+        //  OdomFrame ֧ɫԶ⸳ֵλڿӻ
+        emit cloudFrameReady(Frame);
     }
 
     file.close();
