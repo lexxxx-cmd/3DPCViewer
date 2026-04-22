@@ -112,7 +112,7 @@ void VisualAreaWidget::onCloudFrameReady(const GeneralCloudFrame& frame) {
 
 void VisualAreaWidget::onOdomFrameReady(const OdomFrame& frame) {
   if (cam_viz) {
-    cam_viz->updatePose(frame.pose.x, frame.pose.y, frame.pose.z,
+    cam_viz->updatePose(frame.index, frame.pose.x, frame.pose.y, frame.pose.z,
         frame.pose.qx, frame.pose.qy, frame.pose.qz, frame.pose.qw);
   }
 
