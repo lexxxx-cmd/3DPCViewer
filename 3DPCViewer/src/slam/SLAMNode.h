@@ -19,7 +19,7 @@ public:
      * @param args Arguments to pass to the process
      * @return true if process started successfully, otherwise false.
      */
-    bool start(const QString& executablePath, const QStringList& args = QStringList());
+    bool start(const QString& executablePath, const QStringList& args = QStringList(), const QString & workingDir = "");
 
     /**
      * @brief Safely terminate the underlying process.

@@ -104,7 +104,7 @@ void BagWorker::processBin(const QString& bin_path) {
         ReadBinaryLittleEndian(&file, &num_images);
         std::cout << "images.bin: " << num_images << std::endl;
 
-        // 定义统一的坐标系转换矩阵: 绕X轴旋转-90度 (COLMAP -> OSG)
+        // 定义统一的坐标系转换矩阵: 绕X轴旋转-90度 (COLMAP -> ros)
         Eigen::Matrix3d Rx_m90;
         Rx_m90 << 1, 0, 0,
             0, 0, 1,
@@ -142,7 +142,7 @@ void BagWorker::processBin(const QString& bin_path) {
             // 1. 获取 COLMAP 坐标系下的 C2W 位置
             Eigen::Vector3d camera_center = -R.transpose() * t;
 
-            // 2. 将位置转换到 OSG 坐标系
+            // 2. 将位置转换到 ros 坐标系
             Eigen::Vector3d camera_center_osg = Rx_m90 * camera_center;
 
             // 3. 将姿态转换到 OSG 坐标系

@@ -14,6 +14,7 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
+#include <pcl/io/pcd_io.h>
 
 // Define structures needed for parsing
 struct ZmqMessage {
@@ -252,11 +253,6 @@ int main(int argc, char** argv)
         std::remove("images.bin");
         std::remove("points3D.bin");
 
-        // 先写入占位的 num_images (稍后回填)
-        uint64_t placeholder = 0;
-        std::ofstream ofs_init("images.bin", std::ios::binary);
-        ofs_init.write((char*)&placeholder, sizeof(uint64_t));
-        ofs_init.close();
 
         // ===================== 修正为 SIMPLE_RADIAL 相机参数 =====================
         const int32_t camera_id = 1;
@@ -360,31 +356,44 @@ int main(int argc, char** argv)
                     double tx = t_w2c.x();
                     double ty = t_w2c.y();
                     double tz = t_w2c.z();
+<<<<<<< HEAD
+=======
 
                     // 名称生成保持不变
+>>>>>>> parent of fc32c93 (fix::矫正ros-> colmap坐标系的旋转过程，解决可视化程序显示的局部坐标系与colmapgui里不对齐的问题。)
                     uint32_t sec = odom.timestamp / 1000000000ULL;
                     uint32_t nsec = odom.timestamp % 1000000000ULL;
                     std::stringstream ss;
+                    // 建议保留更多的小数位以防重名，或者直接使用原始 timestamp
                     ss << sec << "." << (nsec / 100000000) << ".jpg";
                     std::string name = ss.str();
 
+<<<<<<< HEAD
+                    // 以文本追加模式打开 images.txt
+                    std::ofstream ofs("images.txt", std::ios::app);
+
+=======
                     // --- 性能优化：在循环外打开/关闭 images.bin 更好，这里按你原样写入 ---
                     std::ofstream ofs("images.bin", std::ios::binary | std::ios::app);
+>>>>>>> parent of fc32c93 (fix::矫正ros-> colmap坐标系的旋转过程，解决可视化程序显示的局部坐标系与colmapgui里不对齐的问题。)
                     if (ofs.is_open()) {
-                        ofs.write((char*)&image_id, sizeof(uint32_t));
-                        ofs.write((char*)&qw, sizeof(double));
-                        ofs.write((char*)&qx, sizeof(double));
-                        ofs.write((char*)&qy, sizeof(double));
-                        ofs.write((char*)&qz, sizeof(double));
-                        ofs.write((char*)&tx, sizeof(double));
-                        ofs.write((char*)&ty, sizeof(double));
-                        ofs.write((char*)&tz, sizeof(double));
-                        ofs.write((char*)&camera_id, sizeof(uint32_t));
-                        ofs.write(name.c_str(), name.length() + 1); // include '\0'
-                        ofs.write((char*)&points2d_size, sizeof(uint64_t));
+                        // 设置浮点数输出精度，确保位姿不丢失精度
+                        ofs << std::fixed << std::setprecision(10);
+
+                        // 第 1 行: 基本信息和位姿
+                        // IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME
+                        ofs << image_id << " "
+                            << qw << " " << qx << " " << qy << " " << qz << " "
+                            << tx << " " << ty << " " << tz << " "
+                            << camera_id << " " << name << "\n";
+
+                        // 第 2 行: 特征点数据
+                        // 注意：即使没有特征点，COLMAP 格式也要求这一行存在（可以为空行）
+                        // 如果你有具体的 2D 点坐标，应在此循环写入。目前按你原代码逻辑写入空行：
+                        ofs << "\n";
+
                         ofs.close();
                     }
-
                     if (odom_count < 5) {
                         std::cout << "[ColmapExporter] Handled ODOM Frame " << odom_count + 1
                             << " | Timestamp: " << odom.timestamp
@@ -396,6 +405,8 @@ int main(int argc, char** argv)
                 else if (msg.header == "[PCD]") {
 
                     PointCloud::Ptr cloud = parseSensorPc2Payload(msg.payload.data(), msg.payload.size());
+
+                      // Debug: Save raw cloud to PCD for inspection
 
                     // 移除 NaN，并截断极端异常值点，防止 PCL VoxelGrid 计算包围盒时整型溢出
                     PointCloud::Ptr valid_cloud(new PointCloud());
@@ -456,45 +467,62 @@ int main(int argc, char** argv)
                     break;
                 }
             }
-
+            pcl::io::savePCDFileBinary(
+                "debug_cloud.pcd",
+                *final_cloud);
             std::cout << "[ColmapExporter] Final voxel size: " << final_voxel_size << "m" << std::endl;
             std::cout << "[ColmapExporter] Writing points3D.bin... Total points: " << final_cloud->size() << std::endl;
 
-            std::ofstream ofs_pts("points3D.bin", std::ios::binary);
-            uint64_t num_points = final_cloud->size();
-            ofs_pts.write((char*)&num_points, sizeof(uint64_t));
+            // 建议文件名改为 .txt
+            std::ofstream ofs_pts("points3D.txt");
+            if (!ofs_pts.is_open()) {
+                std::cerr << "Could not open points3D.txt for writing." << std::endl;
+                return -1;
+            }
 
-            uint64_t track_len = 0;
+            // COLMAP 文本文件通常包含一些注释头信息（可选，但建议加上）
+            ofs_pts << "# 3D point list with one line of data per point:" << std::endl;
+            ofs_pts << "#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[]" << std::endl;
+            ofs_pts << "# Number of points: " << final_cloud->size() << std::endl;
+
+            // 设置浮点数精度，防止坐标丢失精度
+            ofs_pts << std::fixed << std::setprecision(8);
+
+            uint64_t track_len = 0; // 轨迹长度为0，意味着这些点没有关联的 2D 特征点
             double error = 0.0;
-            for (uint64_t i = 0; i < num_points; ++i) {
+
+            for (uint64_t i = 0; i < final_cloud->size(); ++i) {
                 uint64_t point3d_id = i + 1;
                 const auto& pt = final_cloud->points[i];
 
+<<<<<<< HEAD
+                // 坐标转换逻辑保持不变
+                double pt_x = -pt.y;
+=======
                 // Convert point from OSG to COLMAP (Rx_90)
                 double pt_x = pt.x;
+>>>>>>> parent of fc32c93 (fix::矫正ros-> colmap坐标系的旋转过程，解决可视化程序显示的局部坐标系与colmapgui里不对齐的问题。)
                 double pt_y = -pt.z;
                 double pt_z = pt.y;
 
-                uint8_t pt_r = pt.r, pt_g = pt.g, pt_b = pt.b;
+                // 写入格式：ID X Y Z R G B ERROR
+                // 注意：R G B 必须转为 int，否则会输出不可见字符
+                ofs_pts << point3d_id << " "
+                    << pt_x << " "
+                    << pt_y << " "
+                    << pt_z << " "
+                    << (int)pt.r << " "
+                    << (int)pt.g << " "
+                    << (int)pt.b << " "
+                    << error;
 
-                ofs_pts.write((char*)&point3d_id, sizeof(uint64_t));
-                ofs_pts.write((char*)&pt_x, sizeof(double));
-                ofs_pts.write((char*)&pt_y, sizeof(double));
-                ofs_pts.write((char*)&pt_z, sizeof(double));
-                ofs_pts.write((char*)&pt_r, sizeof(uint8_t));
-                ofs_pts.write((char*)&pt_g, sizeof(uint8_t));
-                ofs_pts.write((char*)&pt_b, sizeof(uint8_t));
-                ofs_pts.write((char*)&error, sizeof(double));
-                ofs_pts.write((char*)&track_len, sizeof(uint64_t));
+                // TRACK 字段：由于 track_len 为 0，后面不接任何数据，直接换行
+                // 如果以后有追踪数据，格式为 [IMAGE_ID POINT2D_IDX IMAGE_ID POINT2D_IDX ...]
+                ofs_pts << std::endl;
             }
-            ofs_pts.close();
 
-            // 回填 num_images 到文件开头
-            std::fstream ofs_fix("images.bin", std::ios::binary | std::ios::in | std::ios::out);
-            uint64_t final_count = static_cast<uint64_t>(odom_count);
-            ofs_fix.seekp(0, std::ios::beg);
-            ofs_fix.write((char*)&final_count, sizeof(uint64_t));
-            ofs_fix.close();
+            ofs_pts.close();
+            std::cout << "[ColmapExporter] points3D.txt completed!" << std::endl;
 
             std::cout << "[ColmapExporter] Processed " << odom_count << " ODOM frames." << std::endl;
             std::cout << "[ColmapExporter] Processed " << pcd_count << " PCD frames." << std::endl;

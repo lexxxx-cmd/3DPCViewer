@@ -1,5 +1,6 @@
 #include "SLAMNode.h"
 #include <QDebug>
+#include <QFileInfo>
 
 namespace slam {
 
@@ -12,13 +13,23 @@ SLAMNode::SLAMNode(QObject* parent)
     connect(&process_, static_cast<void(QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), 
             this, &SLAMNode::nodeFinished);
     connect(&process_, &QProcess::errorOccurred, this, &SLAMNode::nodeError);
+    // 在构造函数里连接
+    connect(&process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        qDebug() << "[SLAMNode] Critical Error Code:" << error;
+        });
 }
 
 SLAMNode::~SLAMNode() {
     stop();
 }
 
-bool SLAMNode::start(const QString& executablePath, const QStringList& args) {
+bool SLAMNode::start(const QString& executablePath, const QStringList& args, const QString& workingDir) {
+    if (!workingDir.isEmpty()) {
+        process_.setWorkingDirectory(workingDir);
+    } else {
+        QFileInfo exeInfo(executablePath);
+        process_.setWorkingDirectory(exeInfo.absolutePath());
+    }
     if (isRunning()) {
         qWarning() << "[SLAMNode] Process is already running. You must stop it first.";
         return false;

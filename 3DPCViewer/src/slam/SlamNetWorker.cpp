@@ -97,17 +97,37 @@ void SlamNetWorker::sendRequest(slam::net::Command cmd, const QList<QByteArray>&
 }
 
 void SlamNetWorker::onPollTimer() {
+    // 限流打印：每 1 秒（5ms * 200）打印一次心跳
+    static int tick = 0;
+    if (tick++ % 200 == 0) {
+        qDebug() << "[SlamNetWorker] Timer ticking. socket=" << (socket_ != nullptr) 
+                 << " waiting=" << isWaitingForReply_;
+    }
     if (!socket_ || !isWaitingForReply_) {
         return;
     }
 
     try {
-        net::Command replyCmd;
+        zmq::message_t headerMsg;
+        // ���Է���������
+        auto res = socket_->recv(headerMsg, zmq::recv_flags::dontwait);
 
-        // dontwait flag ensures Qt's main event loop isn't blocked inside the worker thread
-        if (!net::receiveCommand(*socket_, replyCmd, zmq::recv_flags::dontwait)) {
-            return; // No message available right now, return and poll next tick
+        if (!res.has_value()) return; // ��û���ݣ�����һ��
+
+        // --- ֻҪ���е����˵�� socket �Ѿ������һ�ν��ն��� ---
+        isWaitingForReply_ = false; // �������ã������´� poll �ᱨ״̬����
+
+        if (headerMsg.size() != sizeof(net::Command)) {
+            emit errorOccurred("Protocol Mismatch: Expected 1 byte, got " + QString::number(headerMsg.size()));
+            // ������ж����֡���ǵ�����
+            while (socket_->get(zmq::sockopt::rcvmore)) {
+                zmq::message_t tmp; socket_->recv(tmp);
+            }
+            return;
         }
+
+        net::Command replyCmd = *static_cast<const net::Command*>(headerMsg.data());
+
 
         // We successfully received the command header, pull all remaining parts
         QList<QByteArray> parts;
@@ -124,10 +144,11 @@ void SlamNetWorker::onPollTimer() {
 
         // State reset: we are allowed to send the next message
         isWaitingForReply_ = false;
-
+        qDebug() << "[SlamNetWorker] Actually emitting response! CMD:" << static_cast<int>(replyCmd);
         emit responseReceived(replyCmd, parts);
 
     } catch (const zmq::error_t& e) {
+        isWaitingForReply_ = false; // �����쳣Ҳ��������
         emit errorOccurred(QString("ZMQ Receive Error: %1").arg(e.what()));
     }
 }

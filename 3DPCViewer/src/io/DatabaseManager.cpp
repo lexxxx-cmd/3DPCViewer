@@ -275,7 +275,9 @@ void DatabaseManager::exportColmapStream(const QString& bag_uuid, const QString&
 
     QString odom_table;
     QString pcd_table;
+    QString image_table;
 
+    // 获取 SLAM 位姿和点云表格
     QSqlQuery q(db);
     q.prepare("SELECT topic_name, dynamic_table_name FROM origin WHERE bag_uuid = ? AND origin_name = ? AND topic_name IN ('/aft_mapped_to_init', '/cloud_registered_rgb')");
     q.addBindValue(bag_uuid);
@@ -286,6 +288,14 @@ void DatabaseManager::exportColmapStream(const QString& bag_uuid, const QString&
             if(topic == "/aft_mapped_to_init") odom_table = q.value(1).toString();
             else if(topic == "/cloud_registered_rgb") pcd_table = q.value(1).toString();
         }
+    }
+
+    // 尝试获取 raw 图像表格（如果不存在也不会报错，只是不发送图像）
+    QSqlQuery q_raw(db);
+    q_raw.prepare("SELECT dynamic_table_name FROM origin WHERE bag_uuid = ? AND origin_name = 'raw' AND topic_name = '/usb_cam/image_raw/compressed'");
+    q_raw.addBindValue(bag_uuid);
+    if(q_raw.exec() && q_raw.next()) {
+        image_table = q_raw.value(0).toString();
     }
 
     if(odom_table.isEmpty() || pcd_table.isEmpty()) {
@@ -300,32 +310,42 @@ void DatabaseManager::exportColmapStream(const QString& bag_uuid, const QString&
         QString endpoint = QString("tcp://*:%1").arg(zmq_port);
         push_sock.bind(endpoint.toStdString());
 
-        auto sendData = [&](const QString& topic, const QString& table, const QString& header) {
-            QSqlQuery fetch_q(db);
-            fetch_q.setForwardOnly(true);
-            fetch_q.prepare(QString("SELECT data FROM %1 ORDER BY timestamp ASC").arg(table));
-            if(fetch_q.exec()) {
-                int i = 0;
-                while(fetch_q.next()) {
-                    QByteArray payload = fetch_q.value(0).toByteArray();
-                    
-                    zmq::message_t msg_head(header.toStdString().data(), header.size());
-                    push_sock.send(msg_head, zmq::send_flags::sndmore);
-                    
-                    zmq::message_t msg_body(payload.data(), payload.size());
-                    push_sock.send(msg_body, zmq::send_flags::none);
-                    qDebug() << i++;
-                }
-            }
-        };
+        QStringList union_parts;
+        union_parts.append(QString("SELECT '[ODOM]', timestamp, data FROM %1").arg(odom_table));
+        union_parts.append(QString("SELECT '[PCD]', timestamp, data FROM %1").arg(pcd_table));
 
-        sendData("/aft_mapped_to_init", odom_table, "[ODOM]");
-        sendData("/cloud_registered_rgb", pcd_table, "[PCD]");
+        if (!image_table.isEmpty()) {
+            union_parts.append(QString("SELECT '[IMAGE]', timestamp, data FROM %1").arg(image_table));
+        }
+
+        QString final_sql = union_parts.join(" UNION ALL ") + " ORDER BY timestamp ASC";
+
+        QSqlQuery fetch_q(db);
+        fetch_q.setForwardOnly(true);
+        if(fetch_q.exec(final_sql)) {
+            int i = 1;
+            while(fetch_q.next()) {
+                QString header = fetch_q.value(0).toString();
+                qint64 tstamp = fetch_q.value(1).toLongLong();
+                QByteArray payload = fetch_q.value(2).toByteArray();
+
+                zmq::message_t msg_head(header.toStdString().data(), header.size());
+                push_sock.send(msg_head, zmq::send_flags::sndmore);
+
+                zmq::message_t msg_body(payload.data(), payload.size());
+                push_sock.send(msg_body, zmq::send_flags::none);
+
+                if (i % 1000 == 0) {
+                    qDebug() << "[DatabaseManager] Exported" << i << "messages.";
+                }
+                i++;
+            }
+        }
 
         // [EOF]
         zmq::message_t eof_msg("[EOF]", 5);
         push_sock.send(eof_msg, zmq::send_flags::none);
-        
+
         qDebug() << "[DatabaseManager] Export stream finished.";
     } catch (const zmq::error_t& e) {
         emit errorOccurred(QString("ZMQ Bind Error: %1").arg(e.what()));

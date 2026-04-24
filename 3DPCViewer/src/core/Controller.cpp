@@ -42,7 +42,10 @@ void Controller::setup_connections() {
   connect(slam_manager.get(), &slam::SLAMNodeManager::nodeOutputReceived, this, [](const QString& msg){
     qDebug() << "[SLAM Process] :" << msg;
   });
-  
+  // 【新增】：捕获并打印 SLAM 进程的标准错误输出 (cerr)
+  connect(slam_manager.get(), &slam::SLAMNodeManager::nodeErrorReceived, this, [](const QString& msg) {
+      qWarning() << "[SLAM Process Error] :" << msg;
+      });
   connect(slam_manager.get(), &slam::SLAMNodeManager::slamResponseReceived, this, &Controller::handleSlamResponse);
 
   connect(data_service.get(), &DataService::nextSlamFrameReady, this, &Controller::handleNextSlamFrame);
@@ -136,12 +139,13 @@ void Controller::handleRunSlamRequest(const QString& algorithm, bool is_rt_previ
         QString exe_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/x64/Release/slam.exe";
         QString mode_path = "mono_inertial_tum_vi";
         QString vocab_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/Vocabulary/ORBvoc.bin";
-        QString settings_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/Examples/Monocular-Inertial/EuRoc.yaml";
+        QString settings_path = "E:/shixi/dafentech/ORB_SLAM3_Windows/Examples/Monocular-Inertial/TUM4.yaml";
+        QString working_dir = "E:/shixi/dafentech/ORB_SLAM3_Windows";
 
         QStringList args;
         args << mode_path << vocab_path << settings_path;
 
-        bool ok = slam_manager->startAlgorithm(exe_path, args, "tcp://127.0.0.1:5555");
+        bool ok = slam_manager->startAlgorithm(exe_path, args, "tcp://127.0.0.1:5555", working_dir);
         if (ok) {
            qDebug() << "ORB-SLAM3 process started! Initializing Real DB Stream and forcing start...";
            bool stream_ok = false;
@@ -191,7 +195,7 @@ void Controller::handleSlamResponse(slam::net::Command cmd, const QList<QByteArr
   }
 
   void Controller::handleNextSlamFrame(const QString& topic, const QByteArray& payload, qint64 timestamp) {
-    if (slam_manager->isRunning()) {
+    if (true || slam_manager->isRunning()) {
         static int test_count = 0;
         if (test_count < 20) {
             qDebug() << "frame:" << test_count 

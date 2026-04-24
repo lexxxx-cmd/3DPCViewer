@@ -31,7 +31,7 @@ public:
      * @param args Command line arguments for the process
      * @param zmqAddress Address for the ZMQ socket (default: "tcp://127.0.0.1:5555")
      */
-    bool startAlgorithm(const QString& executablePath, const QStringList& args = QStringList(), const QString& zmqAddress = "tcp://127.0.0.1:5555");
+    bool startAlgorithm(const QString& executablePath, const QStringList& args = QStringList(), const QString& zmqAddress = "tcp://127.0.0.1:5555", const QString& workingDir = "");
 
     /**
      * @brief Stops the current SLAM algorithm and cleans up network.

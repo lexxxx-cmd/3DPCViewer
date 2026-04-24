@@ -39,7 +39,7 @@ SLAMNodeManager::~SLAMNodeManager() {
     }
 }
 
-bool SLAMNodeManager::startAlgorithm(const QString& executablePath, const QStringList& args, const QString& zmqAddress) {
+bool SLAMNodeManager::startAlgorithm(const QString& executablePath, const QStringList& args, const QString& zmqAddress, const QString& workingDir) {
     if (activeNode_->isRunning()) {
         emit managerError("[SLAMNodeManager] Attempting to start, but another SLAM node is currently running.");
         return false;
@@ -51,12 +51,16 @@ bool SLAMNodeManager::startAlgorithm(const QString& executablePath, const QStrin
     QMetaObject::invokeMethod(netWorker_, "initWorker", Qt::QueuedConnection, Q_ARG(QString, zmqAddress));
 
     // Startup the actual underlying executable process
-    bool started = activeNode_->start(executablePath, args);
+    /*
+    bool started = activeNode_->start(executablePath, args, workingDir);
     if (!started) {
         emit managerError("[SLAMNodeManager] Failed to start external SLAM executable.");
     }
+    
 
     return started;
+    */
+    return true;
 }
 
 void SLAMNodeManager::stopAlgorithm() {
