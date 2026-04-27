@@ -18,7 +18,7 @@ DataWidget::DataWidget(QWidget* parent) : QWidget(parent) {
   });
   connect(ui->pB_import_bin, &QPushButton::clicked, this, [this]() {
       QString file_name = QFileDialog::getOpenFileName(this, "Open File", ".",
-          "Open files(*.bin)");
+          "Open files(*.bin *.txt)");
 
       if (file_name.isEmpty()) return;
       ui->lbl_filename->setText(file_name);
