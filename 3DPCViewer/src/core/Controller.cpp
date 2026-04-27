@@ -42,7 +42,7 @@ void Controller::setup_connections() {
   connect(slam_manager.get(), &slam::SLAMNodeManager::nodeOutputReceived, this, [](const QString& msg){
     qDebug() << "[SLAM Process] :" << msg;
   });
-  // 【新增】：捕获并打印 SLAM 进程的标准错误输出 (cerr)
+  // Connect error signal and print SLAM process stderr
   connect(slam_manager.get(), &slam::SLAMNodeManager::nodeErrorReceived, this, [](const QString& msg) {
       qWarning() << "[SLAM Process Error] :" << msg;
       });
@@ -77,7 +77,7 @@ void Controller::handleExportColmapRequest() {
   // Task 1.3: Start ColmapExporter process
   QProcess* exporter_process = new QProcess(this);
   QString exe_path = QCoreApplication::applicationDirPath() + "/ColmapExporter.exe";
-  // The path depends on where CMake outputs the tools binaries. 
+  // The path depends on where CMake outputs the tools binaries.
   // We can also try a relative path if it's in the build tree.
   if (!QFileInfo::exists(exe_path)) {
       exe_path = "E:/C++_pj/repos/3DPCViewer/out/build/x64-Release/3DPCViewer/src/tools/colmap_exporter/ColmapExporter.exe";
@@ -195,12 +195,13 @@ void Controller::handleSlamResponse(slam::net::Command cmd, const QList<QByteArr
   }
 
   void Controller::handleNextSlamFrame(const QString& topic, const QByteArray& payload, qint64 timestamp) {
-    if (true || slam_manager->isRunning()) {
+    constexpr int kMaxDebugFrameCount = 20;
+    if (slam_manager->isRunning()) {
         static int test_count = 0;
-        if (test_count < 20) {
-            qDebug() << "frame:" << test_count 
-                     << "timestamp:" << timestamp 
-                     << "topic:" << topic 
+        if (test_count < kMaxDebugFrameCount) {
+            qDebug() << "frame:" << test_count
+                     << "timestamp:" << timestamp
+                     << "topic:" << topic
                      << "payload size:" << payload.size();
             test_count++;
         }

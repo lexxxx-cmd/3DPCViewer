@@ -32,8 +32,9 @@ InteractionWidget::InteractionWidget(QWidget* parent) : QWidget(parent) {
   connect(ui->HSlider_opacity, &QSlider::valueChanged,
       this, &InteractionWidget::onOpacitySliderChanged);
 
+  constexpr int kDefaultTimerIntervalMs = 100;
   timer = new QTimer(this);
-  timer->setInterval(100);
+  timer->setInterval(kDefaultTimerIntervalMs);
 
   connect(timer, &QTimer::timeout, this, [this]() {
     if (cur_message_num < max_message_num) {

@@ -1,15 +1,14 @@
 add_executable(3DPCViewer main.cpp)
 
-target_include_directories(3DPCViewer PRIVATE 
+target_include_directories(3DPCViewer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-	${CMAKE_SOURCE_DIR}
-	${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 target_include_directories(3DPCViewer PUBLIC
-	${CMAKE_CURRENT_SOURCE_DIR}
-	${PCL_INCLUDE_DIRS}
-	${OPENSCENEGRAPH_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
+    ${OPENSCENEGRAPH_INCLUDE_DIRS}
 )
 
 # TBB is required by MSVC / GCC for std::execution parallel policies.
@@ -30,12 +29,13 @@ if(TBB_FOUND)
     target_link_libraries(3DPCViewer PRIVATE TBB::tbb)
 endif()
 
+# Add subdirectories in alphabetical order (except osgQOpenGL which is third-party)
 add_subdirectory(core)
 add_subdirectory(io)
-add_subdirectory(ui)
 add_subdirectory(node)
 add_subdirectory(osgQOpenGL)
 add_subdirectory(slam)
 add_subdirectory(tools/colmap_exporter)
+add_subdirectory(ui)
  
  

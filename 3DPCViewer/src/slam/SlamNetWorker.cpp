@@ -109,17 +109,17 @@ void SlamNetWorker::onPollTimer() {
 
     try {
         zmq::message_t headerMsg;
-        // ���Է���������
+        // Try to receive response (non-blocking)
         auto res = socket_->recv(headerMsg, zmq::recv_flags::dontwait);
 
-        if (!res.has_value()) return; // ��û���ݣ�����һ��
+        if (!res.has_value()) return; // No data yet, wait for next poll
 
-        // --- ֻҪ���е����˵�� socket �Ѿ������һ�ν��ն��� ---
-        isWaitingForReply_ = false; // �������ã������´� poll �ᱨ״̬����
+        // --- As long as we receive something, socket has received a response ---
+        isWaitingForReply_ = false; // Reset state, avoid duplicate status reports in next poll
 
         if (headerMsg.size() != sizeof(net::Command)) {
             emit errorOccurred("Protocol Mismatch: Expected 1 byte, got " + QString::number(headerMsg.size()));
-            // ������ж����֡���ǵ�����
+            // Clear remaining frames to avoid data corruption
             while (socket_->get(zmq::sockopt::rcvmore)) {
                 zmq::message_t tmp; socket_->recv(tmp);
             }
@@ -148,7 +148,7 @@ void SlamNetWorker::onPollTimer() {
         emit responseReceived(replyCmd, parts);
 
     } catch (const zmq::error_t& e) {
-        isWaitingForReply_ = false; // �����쳣Ҳ��������
+        isWaitingForReply_ = false; // Reset state even on exception
         emit errorOccurred(QString("ZMQ Receive Error: %1").arg(e.what()));
     }
 }

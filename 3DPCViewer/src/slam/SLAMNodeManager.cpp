@@ -49,17 +49,6 @@ bool SLAMNodeManager::startAlgorithm(const QString& executablePath, const QStrin
 
     // Asynchronously initialize the Worker that is sitting on another thread
     QMetaObject::invokeMethod(netWorker_, "initWorker", Qt::QueuedConnection, Q_ARG(QString, zmqAddress));
-
-    // Startup the actual underlying executable process
-    /*
-    bool started = activeNode_->start(executablePath, args, workingDir);
-    if (!started) {
-        emit managerError("[SLAMNodeManager] Failed to start external SLAM executable.");
-    }
-    
-
-    return started;
-    */
     return true;
 }
 

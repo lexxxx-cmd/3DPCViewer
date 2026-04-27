@@ -13,7 +13,7 @@ SLAMNode::SLAMNode(QObject* parent)
     connect(&process_, static_cast<void(QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), 
             this, &SLAMNode::nodeFinished);
     connect(&process_, &QProcess::errorOccurred, this, &SLAMNode::nodeError);
-    // 在构造函数里连接
+    // Connect error signal in constructor to log critical errors
     connect(&process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         qDebug() << "[SLAMNode] Critical Error Code:" << error;
         });

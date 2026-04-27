@@ -15,27 +15,27 @@ class OdomCameraVisualizer {
 public:
     OdomCameraVisualizer() {
         root_group_ = new osg::Group();
-        history_group_ = new osg::Group(); // 专门存放历史轨迹的组
+        history_group_ = new osg::Group(); // Dedicated to storing historical trajectory nodes
         root_group_->addChild(history_group_);
 
-        // 1. 创建历史轨迹的模具 (淡蓝色面，细黄线)
+        // 1. Create historical trajectory model (dark color, semi-transparent)
         history_model_ = createCameraNode(
-            osg::Vec4(0.0f, 0.2f, 0.5f, 0.3f),  // 面的颜色 (低透明度)
-            osg::Vec4(1.0f, 1.0f, 1.0f, 0.3f),  // 线的颜色
-            0.5f                                // 线宽
+            osg::Vec4(0.0f, 0.2f, 0.5f, 0.3f),  // Face color (semi-transparent)
+            osg::Vec4(1.0f, 1.0f, 1.0f, 0.3f),  // Edge color
+            0.5f                                // Line width
         );
 
-        // 2. 创建当前高亮相机的模具 (亮红色面，粗红线)
+        // 2. Create current camera pose model (bright color, bold)
         current_model_ = createCameraNode(
-            osg::Vec4(1.0f, 0.0f, 0.0f, 0.8f),  // 面的颜色 (偏红)
-            osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f),  // 线的颜色 (纯红)
-            2.0f                                // 线宽粗一点
+            osg::Vec4(1.0f, 0.0f, 0.0f, 0.8f),  // Face color (red)
+            osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f),  // Edge color (solid)
+            2.0f                                // Thicker line width
         );
 
-        // 3. 初始化当前相机节点 (全局只有一个)
+        // 3. Initialize current camera node (only one globally)
         current_pose_pat_ = new osg::PositionAttitudeTransform();
         current_pose_pat_->addChild(current_model_);
-        current_pose_pat_->setNodeMask(0); // 初始隐藏，直到收到第一帧数据
+        current_pose_pat_->setNodeMask(0); // Initially hidden, shown after first frame received
         root_group_->addChild(current_pose_pat_);
     }
 
@@ -43,7 +43,7 @@ public:
 
     osg::ref_ptr<osg::Group> getRootNode() { return root_group_; }
 
-    // 注意：这里增加了一个 index 参数！
+    // Note: This function takes an index parameter
     void updatePose(int index, double x, double y, double z,
         double qx, double qy, double qz, double qw) {
         if (!root_group_) return;
@@ -51,21 +51,21 @@ public:
         osg::Vec3d pos(x, y, z);
         osg::Quat quat(qx, qy, qz, qw);
 
-        // 1. 移动当前高亮相机
-        current_pose_pat_->setNodeMask(0xffffffff); // 显示相机
+        // 1. Move current camera pose
+        current_pose_pat_->setNodeMask(0xffffffff); // Show current pose
         current_pose_pat_->setPosition(pos);
         current_pose_pat_->setAttitude(quat);
 
-        // 2. 处理倒退 (Rewind)
-        // 如果数据库发来了上一帧，把比当前 index 大的所有未来轨迹删掉
+        // 2. Handle rewind
+        // If database sends a frame smaller than current index, delete future trajectories
         auto it = pose_trail_.upper_bound(index);
         while (it != pose_trail_.end()) {
-            history_group_->removeChild(it->second); // 从场景移除
-            it = pose_trail_.erase(it);              // 从 map 移除
+            history_group_->removeChild(it->second); // Remove from scene graph
+            it = pose_trail_.erase(it);              // Remove from map
         }
 
-        // 3. 去重与新增历史轨迹
-        // 如果这个 index 是新的，才把它加入历史轨迹
+        // 3. Add new historical trajectory
+        // If smaller than current index, add to historical trajectory
         if (pose_trail_.find(index) == pose_trail_.end()) {
             osg::ref_ptr<osg::PositionAttitudeTransform> pat = new osg::PositionAttitudeTransform();
             pat->setPosition(pos);
@@ -83,7 +83,7 @@ public:
             history_group_->removeChildren(0, history_group_->getNumChildren());
         }
         if (current_pose_pat_) {
-            current_pose_pat_->setNodeMask(0); // 重新隐藏当前相机
+            current_pose_pat_->setNodeMask(0); // Hide current camera
         }
     }
 
@@ -92,14 +92,14 @@ private:
     osg::ref_ptr<osg::Group> history_group_;
     osg::ref_ptr<osg::PositionAttitudeTransform> current_pose_pat_;
 
-    // 两个模具 (节点共享)
+    // Shared model (node sharing)
     osg::ref_ptr<osg::Node> history_model_;
     osg::ref_ptr<osg::Node> current_model_;
 
-    // 用 map 追踪所有已生成的位姿，Key 是帧的 index
+    // Use map to track all generated poses, Key is frame index
     std::map<int, osg::ref_ptr<osg::PositionAttitudeTransform>> pose_trail_;
 
-    // 辅助工厂函数：根据指定颜色和线宽生成视锥体模具
+    
     osg::ref_ptr<osg::Node> createCameraNode(const osg::Vec4& face_color, const osg::Vec4& line_color, float line_width_val) {
         osg::ref_ptr<osg::MatrixTransform> local_rot = new osg::MatrixTransform();
         osg::ref_ptr<osg::Geode> geode = new osg::Geode();
@@ -111,9 +111,8 @@ private:
         vertices->push_back(osg::Vec3(half, -half, height));  // 1
         vertices->push_back(osg::Vec3(half, half, height));   // 2
         vertices->push_back(osg::Vec3(-half, half, height));  // 3
-        vertices->push_back(osg::Vec3(0, 0, 0));              // 4 (光心)
+        vertices->push_back(osg::Vec3(0, 0, 0));              // 4 
 
-        // --- 绘制面 ---
         osg::ref_ptr<osg::Geometry> face_geometry = new osg::Geometry();
         face_geometry->setVertexArray(vertices);
         osg::ref_ptr<osg::DrawElementsUInt> face_indices = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES);
@@ -131,8 +130,6 @@ private:
         face_geometry->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON);
         face_geometry->getOrCreateStateSet()->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
         geode->addDrawable(face_geometry);
-
-        // --- 绘制线框 ---
         osg::ref_ptr<osg::Geometry> line_geometry = new osg::Geometry();
         line_geometry->setVertexArray(vertices);
         osg::ref_ptr<osg::DrawElementsUInt> indices = new osg::DrawElementsUInt(osg::PrimitiveSet::LINES);
@@ -149,7 +146,6 @@ private:
         line_geometry->getOrCreateStateSet()->setAttributeAndModes(line_width, osg::StateAttribute::ON);
         geode->addDrawable(line_geometry);
 
-        // --- 绘制坐标轴 ---
         osg::ref_ptr<osg::Geometry> axes_geom = new osg::Geometry();
         osg::ref_ptr<osg::Vec3Array> axes_verts = new osg::Vec3Array;
         osg::ref_ptr<osg::Vec4Array> axes_cols = new osg::Vec4Array;
@@ -169,7 +165,7 @@ private:
 
         local_rot->addChild(geode);
 
-        // --- Shader 挂载 ---
+        // --- Shader---
         const char* vertSource =
             "uniform mat4 osg_ModelViewProjectionMatrix;\n"
             "attribute vec4 osg_Vertex;\n"
