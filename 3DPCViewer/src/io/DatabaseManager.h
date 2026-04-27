@@ -44,6 +44,7 @@ public slots:
     void stopSlamStream();
 
     void exportColmapStream(const QString& bag_uuid, const QString& origin_name, int zmq_port);
+    void exportColmapStreamAll(const QString& bag_uuid, const QString& origin_name, int zmq_port);
 
     void updateProgress(const int percent);
     void fetchTopicList();

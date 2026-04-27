@@ -21,6 +21,7 @@ find_package(Qt${QT_VERSION_MAJOR}
         Sql
 )
 find_package(PCL REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(OpenSceneGraph 3.6.5 REQUIRED osg osgDB osgGA osgViewer osgUtil)
 find_package(cppzmq CONFIG REQUIRED)
 

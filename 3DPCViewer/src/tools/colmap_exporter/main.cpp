@@ -15,6 +15,13 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/io/pcd_io.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+#include <opencv2/opencv.hpp>
 
 // Define structures needed for parsing
 struct ZmqMessage {
@@ -195,6 +202,84 @@ PointCloud::Ptr parseSensorPc2Payload(const uint8_t* payload, size_t length) {
     return cloud;
 }
 
+void parseImagePayload(const uint8_t* payload, size_t length, const std::string& save_dir) {
+    size_t offset = 0;
+
+    // --- 1. 数据解析 (基于 ROS CompressedImage 序列化结构) ---
+
+    // 安全检查：确保头部基本长度足够
+    if (length < 12) return;
+
+    // 解析序列号 seq (4 bytes)
+    uint32_t seq = *reinterpret_cast<const uint32_t*>(payload + offset);
+    offset += 4;
+
+    // 解析秒 sec (4 bytes)
+    uint32_t sec = *reinterpret_cast<const uint32_t*>(payload + offset);
+    offset += 4;
+
+    // 解析纳秒 nsec (4 bytes)
+    uint32_t nsec = *reinterpret_cast<const uint32_t*>(payload + offset);
+    offset += 4;
+
+    // 解析 frame_id (string: uint32 长度 + 字符数据)
+    uint32_t frame_id_len = *reinterpret_cast<const uint32_t*>(payload + offset);
+    offset += 4;
+    offset += frame_id_len;
+
+    // 解析 format 字符串 (string: uint32 长度 + 字符数据)
+    uint32_t format_len = *reinterpret_cast<const uint32_t*>(payload + offset);
+    offset += 4;
+    std::string format_str(reinterpret_cast<const char*>(payload + offset), format_len);
+    offset += format_len;
+
+    // 获取图像数据长度 (uint8[]: uint32 长度 + 数据)
+    uint32_t data_len = *reinterpret_cast<const uint32_t*>(payload + offset);
+    offset += 4;
+
+    // 越界检查
+    if (offset + data_len > length) {
+        std::cerr << "[Error] Payload data incomplete or out of bounds!" << std::endl;
+        return;
+    }
+
+    // --- 2. 图像解码 ---
+
+    // 构造 cv::Mat 包装原始压缩数据 (无内存拷贝)
+    cv::Mat rawData(1, static_cast<int>(data_len), CV_8UC1, const_cast<uint8_t*>(payload + offset));
+    cv::Mat decoded_image = cv::imdecode(rawData, cv::IMREAD_COLOR);
+
+    if (decoded_image.empty()) {
+        std::cerr << "[Error] Image decoding failed! Format: " << format_str << std::endl;
+        return;
+    }
+
+    // --- 3. 保存图片逻辑 ---
+
+    try {
+        // 使用 C++17 filesystem 创建目录
+        if (!std::filesystem::exists(save_dir)) {
+            std::filesystem::create_directories(save_dir);
+        }
+
+        // 格式化文件名：sec.nsec.jpg
+        // 使用 std::setfill('0') 确保纳秒位数为9位，方便按名称排序
+        std::ostringstream oss;
+        oss << sec << "." << std::setfill('0') << std::setw(9) << nsec << ".jpg";
+        std::string filename = oss.str();
+
+        // 拼接路径
+        std::filesystem::path filePath = std::filesystem::path(save_dir) / filename;
+
+        // 保存图片
+        if (!cv::imwrite(filePath.string(), decoded_image)) {
+            std::cerr << "[Error] Failed to save image to: " << filePath << std::endl;
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[Exception] Filesystem error: " << e.what() << std::endl;
+    }
+}
 // Global queue
 MessageQueue g_queue;
 
@@ -242,6 +327,7 @@ int main(int argc, char** argv)
 
         int odom_count = 0;
         int pcd_count = 0;
+        int img_count = 0;
 
         PointCloud::Ptr global_cloud(new PointCloud());
         PointCloud::Ptr temp_downsampled_cloud(new PointCloud());
@@ -304,29 +390,33 @@ int main(int argc, char** argv)
                 if (msg.header == "[ODOM]") {
                     OdomFrame odom = parseOdomPayload(msg.payload.data(), msg.payload.size());
 
-                    // 1. 获取 OSG 坐标系下的 C2W (Camera-to-World) 姿态与位置
-                    Eigen::Quaterniond q_osg(odom.pose.qw, odom.pose.qx, odom.pose.qy, odom.pose.qz);
-                    Eigen::Matrix3d R_osg = q_osg.toRotationMatrix();
-                    Eigen::Vector3d C_osg(odom.pose.x, odom.pose.y, odom.pose.z);
+                    // 1. 获取 ROS 坐标系下的 LiDAR C2W (Camera-to-World) 姿态与位置
+                    Eigen::Quaterniond q_c2w(odom.pose.qw, odom.pose.qx, odom.pose.qy, odom.pose.qz);
+                    Eigen::Matrix3d R_l2w = q_c2w.toRotationMatrix();
+                    Eigen::Vector3d t_l2w(odom.pose.x, odom.pose.y, odom.pose.z);
 
-                    // 2. 定义逆变换矩阵: OSG -> COLMAP
-                    // 在 processBin 中，COLMAP -> OSG 用的是 Rx_m90 (绕X旋转-90度)
-                    // 因此这里 OSG -> COLMAP 需要用 Rx_m90 的逆，即 Rx_90 (绕X旋转+90度)
-                    Eigen::Matrix3d Rx_90;
-                    Rx_90 << 1, 0, 0,
+                    // 2. 定义逆变换矩阵: ROS -> COLMAP
+                    Eigen::Matrix3d R_2col;
+                    R_2col << 0, -1, 0,
                         0, 0, -1,
-                        0, 1, 0;
+                        1, 0, 0;
+                    // lidar -> camera
+                    Eigen::Matrix3d R_l2c;
+                    R_l2c << -0.005197, -0.999974, -0.004912,
+                        0.574600, 0.001034, -0.818434,
+                        0.818418, -0.007076, 0.574580;
+                    Eigen::Vector3d t_l2c(0.001718, -0.245889, -0.039587);  // 如果有具体的平移，请替换这里
+                    // ROS 下camera c2w
+                    Eigen::Matrix3d R_w2l = R_l2w.transpose();
+                    Eigen::Vector3d t_w2l = -R_w2l * t_l2w;
 
-                    // 3. 变换回 COLMAP 世界坐标系下的 C2W
-                    // 严格反推: 既然 R_osg = Rx_m90 * R_c2w_colmap
-                    // 那么 R_c2w_colmap = Rx_90 * R_osg
-                    Eigen::Matrix3d R_c2w_colmap = Rx_90 * R_osg;
-                    Eigen::Vector3d C_colmap = Rx_90 * C_osg;
+                    Eigen::Matrix3d R_w2c_ros = R_l2c * R_w2l;
+                    Eigen::Vector3d t_w2c_ros = R_l2c * t_w2l + t_l2c;
 
-                    // 4. 从 C2W 转化为 COLMAP 要求的 W2C (World-to-Camera)
-                    Eigen::Matrix3d R_w2c = R_c2w_colmap.transpose();
-                    Eigen::Vector3d t_w2c = -R_w2c * C_colmap;
-                    Eigen::Quaterniond q_w2c(R_w2c);
+                    Eigen::Matrix3d R_w2c_matrix = R_w2c_ros * R_2col.transpose();
+                    Eigen::Vector3d t_w2c = t_w2c_ros;
+                    Eigen::Quaterniond q_w2c(R_w2c_matrix);
+                    q_w2c.normalize();
 
                     // 5. 准备写入 images.bin
                     uint32_t image_id = odom_count + 1;
@@ -341,26 +431,16 @@ int main(int argc, char** argv)
                     double tx = t_w2c.x();
                     double ty = t_w2c.y();
                     double tz = t_w2c.z();
-<<<<<<< HEAD
-=======
 
                     // 名称生成保持不变
->>>>>>> parent of fc32c93 (fix::矫正ros-> colmap坐标系的旋转过程，解决可视化程序显示的局部坐标系与colmapgui里不对齐的问题。)
                     uint32_t sec = odom.timestamp / 1000000000ULL;
                     uint32_t nsec = odom.timestamp % 1000000000ULL;
                     std::stringstream ss;
                     // 建议保留更多的小数位以防重名，或者直接使用原始 timestamp
                     ss << sec << "." << (nsec / 100000000) << ".jpg";
                     std::string name = ss.str();
-
-<<<<<<< HEAD
-                    // 以文本追加模式打开 images.txt
                     std::ofstream ofs("images.txt", std::ios::app);
 
-=======
-                    // --- 性能优化：在循环外打开/关闭 images.bin 更好，这里按你原样写入 ---
-                    std::ofstream ofs("images.bin", std::ios::binary | std::ios::app);
->>>>>>> parent of fc32c93 (fix::矫正ros-> colmap坐标系的旋转过程，解决可视化程序显示的局部坐标系与colmapgui里不对齐的问题。)
                     if (ofs.is_open()) {
                         // 设置浮点数输出精度，确保位姿不丢失精度
                         ofs << std::fixed << std::setprecision(10);
@@ -379,13 +459,6 @@ int main(int argc, char** argv)
 
                         ofs.close();
                     }
-                    if (odom_count < 5) {
-                        std::cout << "[ColmapExporter] Handled ODOM Frame " << odom_count + 1
-                            << " | Timestamp: " << odom.timestamp
-                            << " | Pose: (" << C_osg.x() << ", " << C_osg.y() << ", " << C_osg.z() << ")"
-                            << std::endl;
-                    }
-                    odom_count++;
                 }
                 else if (msg.header == "[PCD]") {
 
@@ -419,8 +492,14 @@ int main(int argc, char** argv)
                     }
                     pcd_count++;
                 }
+                else if (msg.header == "[IMAGE]") {
+                    //解码保存文件夹
+                    img_count++;
+                    parseImagePayload(msg.payload.data(), msg.payload.size(),
+                                      "./images");
+                }
             }
-
+            std::cout << "image: " << img_count;
             receiver_thread.join();
 
             // Final global downsample with adaptive voxel size to hit ~100MB target
@@ -479,14 +558,8 @@ int main(int argc, char** argv)
             for (uint64_t i = 0; i < final_cloud->size(); ++i) {
                 uint64_t point3d_id = i + 1;
                 const auto& pt = final_cloud->points[i];
-
-<<<<<<< HEAD
                 // 坐标转换逻辑保持不变
                 double pt_x = -pt.y;
-=======
-                // Convert point from OSG to COLMAP (Rx_90)
-                double pt_x = pt.x;
->>>>>>> parent of fc32c93 (fix::矫正ros-> colmap坐标系的旋转过程，解决可视化程序显示的局部坐标系与colmapgui里不对齐的问题。)
                 double pt_y = -pt.z;
                 double pt_z = pt.y;
 
@@ -514,7 +587,5 @@ int main(int argc, char** argv)
             return 0;
         }
 
-    }
-    printf("ORB-SLAM3");
     return 0;
 }

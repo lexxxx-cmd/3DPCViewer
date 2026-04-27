@@ -54,8 +54,9 @@ DataService::DataService(QObject* parent) : QObject(parent) {
   // Connect internal signals to worker slots (replacing invokeMethod)
   connect(this, &DataService::requestInitializeDb, db_manager,
           &DatabaseManager::initialize, Qt::QueuedConnection);
+  //TODO
   connect(this, &DataService::requestExportColmapStream, db_manager,
-          &DatabaseManager::exportColmapStream, Qt::QueuedConnection);
+          &DatabaseManager::exportColmapStreamAll, Qt::QueuedConnection);
   connect(this, &DataService::requestInsertTopic, db_manager,
           &DatabaseManager::insertTopic, Qt::QueuedConnection);
   connect(this, &DataService::requestStoreMessage, db_manager,

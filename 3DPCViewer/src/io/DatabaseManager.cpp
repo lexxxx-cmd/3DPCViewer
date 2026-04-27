@@ -270,6 +270,93 @@ void DatabaseManager::stopSlamStream() {
     }
 }
 
+void DatabaseManager::exportColmapStreamAll(const QString& bag_uuid, const QString& origin_name, int zmq_port) {
+    if (!db.isOpen()) return;
+
+    // 使用列表存储所有找到的相关表名，因为一个话题可能对应多个表
+    QStringList odom_tables;
+    QStringList pcd_tables;
+    QStringList image_tables;
+
+    // 1. 从 origin 表中查找所有匹配话题的动态表名，不再过滤 bag_uuid
+    QSqlQuery q(db);
+    q.prepare("SELECT topic_name, dynamic_table_name FROM origin "
+        "WHERE topic_name IN ('/aft_mapped_to_init', '/cloud_registered_rgb', '/usb_cam/image_raw/compressed')");
+
+    if (q.exec()) {
+        while (q.next()) {
+            QString topic = q.value(0).toString();
+            QString tableName = q.value(1).toString();
+
+            if (topic == "/aft_mapped_to_init") odom_tables << tableName;
+            else if (topic == "/cloud_registered_rgb") pcd_tables << tableName;
+            else if (topic == "/usb_cam/image_raw/compressed") image_tables << tableName;
+        }
+    }
+
+    if (odom_tables.isEmpty() || pcd_tables.isEmpty()) {
+        emit errorOccurred("No tables found for required topics in the entire database.");
+        return;
+    }
+
+    qDebug() << "[DatabaseManager] Starting Global COLMAP export on port " << zmq_port;
+
+    try {
+        zmq::context_t ctx(1);
+        zmq::socket_t push_sock(ctx, zmq::socket_type::push);
+        QString endpoint = QString("tcp://*:%1").arg(zmq_port);
+        push_sock.bind(endpoint.toStdString());
+
+        // 2. 动态构建 Union SQL
+        QStringList all_selects;
+
+        for (const QString& table : odom_tables)
+            all_selects.append(QString("SELECT '[ODOM]', timestamp, data FROM %1").arg(table));
+
+        for (const QString& table : pcd_tables)
+            all_selects.append(QString("SELECT '[PCD]', timestamp, data FROM %1").arg(table));
+
+        for (const QString& table : image_tables)
+            all_selects.append(QString("SELECT '[IMAGE]', timestamp, data FROM %1").arg(table));
+
+        // 将所有表的查询合并，并按时间戳全局排序
+        QString final_sql = all_selects.join(" UNION ALL ") + " ORDER BY timestamp ASC";
+
+        QSqlQuery fetch_q(db);
+        fetch_q.setForwardOnly(true); // 优化大数据量查询
+
+        if (fetch_q.exec(final_sql)) {
+            int i = 1;
+            while (fetch_q.next()) {
+                QString header = fetch_q.value(0).toString();
+                // qint64 tstamp = fetch_q.value(1).toLongLong(); // 如果需要时间戳可以取
+                QByteArray payload = fetch_q.value(2).toByteArray();
+
+                // ZMQ 发送头部
+                zmq::message_t msg_head(header.toStdString().data(), header.size());
+                push_sock.send(msg_head, zmq::send_flags::sndmore);
+
+                // ZMQ 发送数据体
+                zmq::message_t msg_body(payload.data(), payload.size());
+                push_sock.send(msg_body, zmq::send_flags::none);
+
+                if (i % 1000 == 0) {
+                    qDebug() << "[DatabaseManager] Exported" << i << "messages globally.";
+                }
+                i++;
+            }
+        }
+
+        // 发送结束标志
+        zmq::message_t eof_msg("[EOF]", 5);
+        push_sock.send(eof_msg, zmq::send_flags::none);
+
+    }
+    catch (const zmq::error_t& e) {
+        emit errorOccurred(QString("ZMQ Error: %1").arg(e.what()));
+    }
+}
+
 void DatabaseManager::exportColmapStream(const QString& bag_uuid, const QString& origin_name, int zmq_port) {
     if (!db.isOpen()) return;
 
