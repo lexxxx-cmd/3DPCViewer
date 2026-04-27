@@ -248,43 +248,23 @@ int main(int argc, char** argv)
         float voxel_size = 0.05f;
         pcl::VoxelGrid<PointT> vg;
         vg.setLeafSize(voxel_size, voxel_size, voxel_size);
-
-        // Remove old files
-        std::remove("images.bin");
-        std::remove("points3D.bin");
-
-
-        // ===================== 修正为 SIMPLE_RADIAL 相机参数 =====================
         const int32_t camera_id = 1;
-        const int32_t camera_model_id = 4;
-        const uint64_t image_width = 3840;
-        const uint64_t image_height = 2160;
-        // SIMPLE_RADIAL 固定4个参数：f, cx, cy, k
-        const double cam_params[4] = {
-            3279.2218277699917,    // f (焦距)
-            1920.0,                // cx (主点x)
-            1080.0,                // cy (主点y)
-            0.0016164597261278581  // k (径向畸变系数)
+        const uint64_t image_width = 1280;
+        const uint64_t image_height = 960;
+        // OPENCV 模型参数：fx, fy, cx, cy, k1, k2, p1, p2
+        const double cam_params[8] = {
+            641.48038,    // fx
+            668.49735,    // fy
+            640.79402,    // cx
+            490.03617,    // cy
+            0.182431,     // k1
+            -0.258910,    // k2
+            0.000324,     // p1
+            -0.000791     // p2
         };
 
-        // 写入 cameras.bin (一次性写入，固定相机参数)
-        std::ofstream ofs_camera("cameras.bin", std::ios::binary);
-        if (ofs_camera.is_open()) {
-            const uint64_t num_cameras = 1;
-            ofs_camera.write((char*)&num_cameras, sizeof(uint64_t));
-
-            ofs_camera.write((char*)&camera_id, sizeof(int32_t));
-            ofs_camera.write((char*)&camera_model_id, sizeof(int32_t));
-            ofs_camera.write((char*)&image_width, sizeof(uint64_t));
-            ofs_camera.write((char*)&image_height, sizeof(uint64_t));
-
-            // 写入 4 个 double 类型参数（SIMPLE_RADIAL 固定4个）
-            for (int i = 0; i < 4; ++i) {
-                ofs_camera.write((char*)&cam_params[i], sizeof(double));
-            }
-            ofs_camera.close();
-            std::cout << "[ColmapExporter] cameras.bin completed!" << std::endl;
-
+        // 只写入 cameras.txt
+        {
             std::ofstream ofs_camera_txt("cameras.txt");
             if (ofs_camera_txt.is_open()) {
                 // COLMAP 标准注释头
@@ -295,19 +275,24 @@ int main(int argc, char** argv)
                 // 浮点数保留15位精度（避免数据丢失）
                 ofs_camera_txt << std::fixed << std::setprecision(15);
 
-                // 写入格式：ID 模型 宽 高 f cx cy k
+                // 写入格式：ID 模型 宽 高 fx fy cx cy k1 k2 p1 p2
                 ofs_camera_txt << camera_id << " "
-                    << "SIMPLE_RADIAL" << " "
+                    << "OPENCV" << " "
                     << image_width << " "
                     << image_height << " "
-                    << cam_params[0] << " "  // f
-                    << cam_params[1] << " "  // cx
-                    << cam_params[2] << " "  // cy
-                    << cam_params[3] << std::endl;  // k
+                    << cam_params[0] << " "  // fx
+                    << cam_params[1] << " "  // fy
+                    << cam_params[2] << " "  // cx
+                    << cam_params[3] << " "  // cy
+                    << cam_params[4] << " "  // k1
+                    << cam_params[5] << " "  // k2
+                    << cam_params[6] << " "  // p1
+                    << cam_params[7] << std::endl;  // p2
 
                 ofs_camera_txt.close();
                 std::cout << "[ColmapExporter] cameras.txt completed!" << std::endl;
             }
+        }
             while (true) {
                 ZmqMessage msg;
                 g_queue.pop(msg);
