@@ -563,7 +563,7 @@ int main(int argc, char** argv)
             // 坐标转换逻辑保持不变
             double pt_x = -pt.y;
             double pt_y = -pt.z;
-            double pt_z = pt.y;
+            double pt_z = pt.x;
 
             // 写入格式：ID X Y Z R G B ERROR
             // 注意：R G B 必须转为 int，否则会输出不可见字符
