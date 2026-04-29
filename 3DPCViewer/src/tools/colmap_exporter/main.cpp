@@ -379,18 +379,37 @@ int main(int argc, char** argv)
             Eigen::Matrix3d R_w2c_ros = R_l2c * R_w2l;
             Eigen::Vector3d t_w2c_ros = R_l2c * t_w2l + t_l2c;
 
-            Eigen::Matrix3d R_w2c_matrix = R_w2c_ros * R_2col.transpose();
-            Eigen::Vector3d t_w2c = t_w2c_ros;
-            Eigen::Quaterniond q_w2c(R_w2c_matrix);
-            q_w2c.normalize();
+            Eigen::Matrix3d R_w2c_fpv = R_w2c_ros * R_2col.transpose();
+            Eigen::Vector3d t_w2c_fpv = t_w2c_ros;
+
+            Eigen::Matrix3d R_main2fpv;
+            R_main2fpv << 0.99995829, -0.00092137, 0.00908729,
+                0.00061308, 0.99942605, 0.03387016,
+                -0.00911328, -0.03386318, 0.99938493;
+            Eigen::Vector3d t_main2fpv(0.00833581, 0.06864927, 0.00932383);
+
+            // 将 FPV 的 W2C 转换为 C2W，以便在正确的相机坐标系下进行刚体级联
+            Eigen::Matrix3d R_c2w_fpv = R_w2c_fpv.transpose();
+            Eigen::Vector3d t_c2w_fpv = -R_c2w_fpv * t_w2c_fpv;
+
+            // 计算 Main 的绝对 C2W 位姿: T_c2w_main = T_c2w_fpv * T_main2fpv
+            Eigen::Matrix3d R_c2w_main = R_c2w_fpv * R_main2fpv;
+            Eigen::Vector3d t_c2w_main = R_c2w_fpv * t_main2fpv + t_c2w_fpv;
+
+            // 将最终 Main 的 C2W 重新求逆，转回 COLMAP 需要的 W2C 格式
+            Eigen::Matrix3d R_w2c_main = R_c2w_main.transpose();
+            Eigen::Vector3d t_w2c_main = -R_w2c_main * t_c2w_main;
+
+            Eigen::Quaterniond q_w2c_main(R_w2c_main);
+            q_w2c_main.normalize(); // 必须重新归一化以防止浮点误差导致四元数非法
 
             std::ofstream ofs("images.txt", std::ios::app);
             if (ofs.is_open()) {
                 ofs << std::fixed << std::setprecision(10);
                 // 使用同步后的 IMAGE_ID 和 图片的文件名
                 ofs << synced_image_id++ << " "
-                    << q_w2c.w() << " " << q_w2c.x() << " " << q_w2c.y() << " " << q_w2c.z() << " "
-                    << t_w2c.x() << " " << t_w2c.y() << " " << t_w2c.z() << " "
+                    << q_w2c_main.w() << " " << q_w2c_main.x() << " " << q_w2c_main.y() << " " << q_w2c_main.z() << " "
+                    << t_w2c_main.x() << " " << t_w2c_main.y() << " " << t_w2c_main.z() << " "
                     << camera_id << " " << img.filename << "\n\n";
                 ofs.close();
             }
