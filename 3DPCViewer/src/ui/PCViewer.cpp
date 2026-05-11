@@ -38,6 +38,8 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
           &PCViewer::requestRunSlam);
   connect(ui->ControlWidget, &ControlPanelWidget::requestExportColmap, this,
           &PCViewer::requestExportColmap);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestExportPosePcd, this,
+          &PCViewer::requestExportPosePcd);
   connect(ui->ControlWidget, &ControlPanelWidget::requestSetCurrentDataSource, this,
           &PCViewer::requestSetCurrentDataSource);
 }

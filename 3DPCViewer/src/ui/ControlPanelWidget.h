@@ -42,6 +42,7 @@ class ControlPanelWidget : public QWidget {
   void bgColorChanged(const QColor& color);
   void requestRunSlam(const QString& algorithm, bool is_rt_preview);
   void requestExportColmap();
+  void requestExportPosePcd();
   void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
 
  private:

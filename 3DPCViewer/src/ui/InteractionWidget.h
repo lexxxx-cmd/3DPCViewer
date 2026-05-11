@@ -32,6 +32,7 @@ class InteractionWidget : public QWidget {
   void bgColorChanged(const QColor& color);
   void requestRunSlam(const QString& algorithm, bool is_rt_preview);
   void requestExportColmap();
+  void requestExportPosePcd();
 
  private:
   std::unique_ptr<Ui::InteractionWidgetClass> ui;

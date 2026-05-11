@@ -124,6 +124,13 @@
         </property>
        </widget>
       </item>
+      <item row="0" column="1">
+       <widget class="QPushButton" name="pB_export_lvba">
+        <property name="text">
+         <string>导出LVBA</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

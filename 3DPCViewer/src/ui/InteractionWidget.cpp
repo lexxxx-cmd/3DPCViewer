@@ -99,6 +99,12 @@ InteractionWidget::InteractionWidget(QWidget* parent) : QWidget(parent) {
     });
   }
 
+  if (ui->pB_export_lvba) {
+    connect(ui->pB_export_lvba, &QPushButton::clicked, this, [this]() {
+      emit requestExportPosePcd();
+    });
+  }
+
   onSizeSliderChanged(ui->HSlider_size->value());
   onOpacitySliderChanged(ui->HSlider_opacity->value());
 }
