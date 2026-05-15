@@ -16,6 +16,7 @@
 #include <pcl/io/pcd_io.h>
 #include <filesystem>
 #include <deque>
+#include <opencv2/opencv.hpp>
 
 struct ZmqMessage {
     std::string header;
@@ -37,6 +38,12 @@ struct OdomFrame {
 struct PcdFrame {
     uint64_t timestamp;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+};
+
+struct ImageFrame {
+    uint64_t timestamp;
+    std::vector<uint8_t> data;  // raw compressed image bytes (no decode)
+    std::string format;         // e.g. "jpeg"
 };
 
 using PointT = pcl::PointXYZRGB;
@@ -161,6 +168,31 @@ PcdFrame parseSensorPc2Payload(const uint8_t* payload, size_t length) {
     return pcd_frame;
 }
 
+ImageFrame parseImagePayloadLight(const uint8_t* payload, size_t length) {
+    ImageFrame img;
+    img.timestamp = 0;
+    size_t offset = 0;
+
+    if (length < 12) return img;
+
+    uint32_t seq = *reinterpret_cast<const uint32_t*>(payload + offset); offset += 4;
+    uint32_t sec = *reinterpret_cast<const uint32_t*>(payload + offset); offset += 4;
+    uint32_t nsec = *reinterpret_cast<const uint32_t*>(payload + offset); offset += 4;
+    img.timestamp = (uint64_t)sec * 1000000000ULL + nsec;
+
+    uint32_t frame_id_len = *reinterpret_cast<const uint32_t*>(payload + offset); offset += 4;
+    offset += frame_id_len;
+
+    uint32_t format_len = *reinterpret_cast<const uint32_t*>(payload + offset); offset += 4;
+    img.format = std::string(reinterpret_cast<const char*>(payload + offset), format_len); offset += format_len;
+
+    uint32_t data_len = *reinterpret_cast<const uint32_t*>(payload + offset); offset += 4;
+    if (offset + data_len > length) { img.timestamp = 0; return img; }
+
+    img.data.assign(payload + offset, payload + offset + data_len);
+    return img;
+}
+
 MessageQueue g_queue;
 
 void receiver_thread_func(int port) {
@@ -204,100 +236,96 @@ int main(int argc, char** argv) {
 
         std::deque<OdomFrame> odom_buffer;
         std::deque<PcdFrame> pcd_buffer;
+        std::deque<ImageFrame> image_buffer;
 
-        std::filesystem::create_directories("pcds");
+        std::filesystem::create_directories("all_pcd_body");
+        std::filesystem::create_directories("all_image");
+        std::filesystem::create_directories("colmap");
+        std::filesystem::create_directories("depth");
+        std::filesystem::create_directories("reproj");
+
+        const uint64_t IMAGE_SYNC_THRESHOLD_NS = 500000000; // 0.5 seconds
 
         auto process_matched_pair = [&](const OdomFrame& odom, const PcdFrame& pcd) {
+            // Gate: only output when a matching image exists (pose is the anchor)
+            if (image_buffer.empty()) return;
+
+            auto closest_it = image_buffer.begin();
+            uint64_t min_diff = UINT64_MAX;
+            for (auto it = image_buffer.begin(); it != image_buffer.end(); ++it) {
+                uint64_t diff = std::abs((long long)it->timestamp - (long long)odom.timestamp);
+                if (diff < min_diff) {
+                    min_diff = diff;
+                    closest_it = it;
+                }
+            }
+            if (min_diff > IMAGE_SYNC_THRESHOLD_NS) return;
+
             std::ostringstream oss;
             double ts_sec = static_cast<double>(odom.timestamp) / 1e9;
-            oss << std::fixed << std::setprecision(1) << ts_sec;
+            oss << std::fixed << std::setprecision(6) << ts_sec;
             std::string ts_name = oss.str();
 
-            // Lidar pose
-            std::ofstream ofsl("lidar_poses.txt", std::ios::app);
+            // Parse T_WL (Lidar in World) from odom
+            Eigen::Quaterniond q_WL(odom.pose.qw, odom.pose.qx, odom.pose.qy, odom.pose.qz);
+            Eigen::Matrix3d R_WL = q_WL.toRotationMatrix();
+            Eigen::Vector3d t_WL(odom.pose.x, odom.pose.y, odom.pose.z);
+
+            // Lidar to IMU Calibration (T_IL): P_IMU = R_IL * P_Lidar + t_IL
+            Eigen::Matrix3d R_IL;
+            R_IL << -0.000000, -1.000000, -0.000000,
+                     0.500000, -0.000000, -0.866025,
+                     0.866025, -0.000000,  0.500000;
+            Eigen::Vector3d t_IL(-0.0, -0.0684313328845596, -0.008221943675581425);
+
+            // Compute T_LI = T_IL^{-1}
+            Eigen::Matrix3d R_LI = R_IL.transpose();
+            Eigen::Vector3d t_LI = -R_IL.transpose() * t_IL;
+
+            // Compute T_WI = T_WL * T_LI (IMU in World)
+            Eigen::Matrix3d R_WI = R_WL * R_LI;
+            Eigen::Vector3d t_WI = R_WL * t_LI + t_WL;
+            Eigen::Quaterniond q_WI(R_WI);
+            q_WI.normalize();
+
+            // Save T_WI to lidar_poses.txt
+            std::ofstream ofsl("all_pcd_body/lidar_poses.txt", std::ios::app);
             if (ofsl.is_open()) {
                 ofsl << std::fixed << std::setprecision(10);
                 ofsl << ts_name << " "
-                    << odom.pose.x << " " << odom.pose.y << " " << odom.pose.z << " "
-                    << odom.pose.qx << " " << odom.pose.qy << " " << odom.pose.qz << " " << odom.pose.qw << "\n";
+                    << t_WI.x() << " " << t_WI.y() << " " << t_WI.z() << " "
+                    << q_WI.x() << " " << q_WI.y() << " " << q_WI.z() << " " << q_WI.w() << "\n";
             }
 
-            // Camera pose logic (adapted from colmap_exporter)
-            Eigen::Quaterniond q_c2w(odom.pose.qw, odom.pose.qx, odom.pose.qy, odom.pose.qz);
-            Eigen::Matrix3d R_l2w = q_c2w.toRotationMatrix();
-            Eigen::Vector3d t_l2w(odom.pose.x, odom.pose.y, odom.pose.z);
-
-            Eigen::Matrix3d R_2col;
-            R_2col << 0, -1, 0, 0, 0, -1, 1, 0, 0;
-
-            Eigen::Matrix3d R_l2c;
-            R_l2c << -0.005197, -0.999974, -0.004912, 0.574600, 0.001034, -0.818434, 0.818418, -0.007076, 0.574580;
-            Eigen::Vector3d t_l2c(0.001718, -0.245889, -0.039587);
-
-            Eigen::Matrix3d R_w2l = R_l2w.transpose();
-            Eigen::Vector3d t_w2l = -R_w2l * t_l2w;
-
-            Eigen::Matrix3d R_w2c_ros = R_l2c * R_w2l;
-            Eigen::Vector3d t_w2c_ros = R_l2c * t_w2l + t_l2c;
-
-            Eigen::Matrix3d R_w2c_fpv = R_w2c_ros * R_2col.transpose();
-            Eigen::Vector3d t_w2c_fpv = t_w2c_ros;
-            /*
-            Eigen::Matrix3d R_main2fpv;
-            R_main2fpv << 0.99995829, -0.00092137, 0.00908729,
-                0.00061308, 0.99942605, 0.03387016,
-                -0.00911328, -0.03386318, 0.99938493;
-            Eigen::Vector3d t_main2fpv(0.00833581, 0.06864927, 0.00932383);
-            */
-            Eigen::Matrix3d R_main2fpv;
-            R_main2fpv << 1.0,0,0,0,1,0,0,0,1;
-            Eigen::Vector3d t_main2fpv(0,0,0);
-
-            Eigen::Matrix3d R_c2w_fpv = R_w2c_fpv.transpose();
-            Eigen::Vector3d t_c2w_fpv = -R_c2w_fpv * t_w2c_fpv;
-
-            Eigen::Matrix3d R_c2w_main = R_c2w_fpv * R_main2fpv;
-            Eigen::Vector3d t_c2w_main = R_c2w_fpv * t_main2fpv + t_c2w_fpv;
-
-            Eigen::Matrix3d R_c2w_main_ros = R_2col.transpose() * R_c2w_main;
-            Eigen::Quaterniond q_c2w_main_ros(R_c2w_main_ros);
-            q_c2w_main_ros.normalize();
-            Eigen::Vector3d t_c2w_main_ros = R_2col.transpose() * t_c2w_main;
-
-            static bool printed_l2c = false;
-            if (!printed_l2c) {
-                Eigen::Matrix3d Final_R_w2c = R_c2w_main_ros.transpose();
-                Eigen::Vector3d Final_t_w2c = -Final_R_w2c * t_c2w_main_ros;
-
-                Eigen::Matrix3d Final_R_l2c = Final_R_w2c * R_l2w;
-                Eigen::Vector3d Final_t_l2c = Final_R_w2c * t_l2w + Final_t_w2c;
-
-                std::cout << "=== Final Lidar to Camera Transform ===" << std::endl;
-                std::cout << "R_l2c:\n" << Final_R_l2c << std::endl;
-                std::cout << "t_l2c:\n" << Final_t_l2c.transpose() << std::endl;
-                std::cout << "=======================================" << std::endl;
-                printed_l2c = true;
-            }
-
-            std::ofstream ofs_cam("image_poses.txt", std::ios::app);
+            // Save exactly the same T_WI to image_poses.txt
+            std::ofstream ofs_cam("all_image/image_poses.txt", std::ios::app);
             if (ofs_cam.is_open()) {
                 ofs_cam << std::fixed << std::setprecision(10);
                 ofs_cam << ts_name << " "
-                        << t_c2w_main_ros.x() << " " << t_c2w_main_ros.y() << " " << t_c2w_main_ros.z() << " "
-                        << q_c2w_main_ros.x() << " " << q_c2w_main_ros.y() << " " << q_c2w_main_ros.z() << " " << q_c2w_main_ros.w() << "\n";
+                        << t_WI.x() << " " << t_WI.y() << " " << t_WI.z() << " "
+                        << q_WI.x() << " " << q_WI.y() << " " << q_WI.z() << " " << q_WI.w() << "\n";
             }
 
-            // Transform PCD to world frame using Lidar pose
-            Eigen::Affine3d transform = Eigen::Affine3d::Identity();
-            transform.translation() = t_l2w;
-            transform.rotate(q_c2w);
-            Eigen::Affine3f transform_f = transform.cast<float>();
+            // Save image (raw compressed bytes, no decode)
+            std::ofstream fout("all_image/" + ts_name + ".png", std::ios::binary);
+            if (fout.is_open()) {
+                fout.write(reinterpret_cast<const char*>(closest_it->data.data()), closest_it->data.size());
+            }
+            image_buffer.erase(closest_it);
+
+            // Transform pointcloud from World to IMU frame (T_IW = T_WI^{-1})
+            Eigen::Matrix3d R_IW = R_WI.transpose();
+            Eigen::Vector3d t_IW = -R_WI.transpose() * t_WI;
+
+            Eigen::Affine3d transform_IW = Eigen::Affine3d::Identity();
+            transform_IW.translation() = t_IW;
+            transform_IW.linear() = R_IW;
 
             PointCloud::Ptr transformed_cloud(new PointCloud());
-            pcl::transformPointCloud(*(pcd.cloud), *transformed_cloud, transform_f);
+            pcl::transformPointCloud(*(pcd.cloud), *transformed_cloud, transform_IW.cast<float>());
 
-            // Save individual PCD
-            pcl::io::savePCDFileBinary("pcds/" + ts_name + ".pcd", *transformed_cloud);
+            // Save individual PCD in local IMU frame
+            pcl::io::savePCDFileBinary("all_pcd_body/" + ts_name + ".pcd", *transformed_cloud);
         };
 
         auto try_sync = [&](bool flush_all = false) {
@@ -333,6 +361,15 @@ int main(int argc, char** argv) {
                     pcd_buffer.pop_front();
                 }
             }
+
+            // Phase 2: cleanup stale images that are too old for any remaining odom
+            if (!odom_buffer.empty() && !image_buffer.empty()) {
+                uint64_t oldest_odom_ts = odom_buffer.front().timestamp;
+                while (!image_buffer.empty() &&
+                       image_buffer.front().timestamp + IMAGE_SYNC_THRESHOLD_NS < oldest_odom_ts) {
+                    image_buffer.pop_front();
+                }
+            }
         };
 
         while (true) {
@@ -350,6 +387,12 @@ int main(int argc, char** argv) {
             } else if (msg.header == "[PCD]") {
                 pcd_buffer.push_back(parseSensorPc2Payload(msg.payload.data(), msg.payload.size()));
                 try_sync();
+            } else if (msg.header == "[IMAGE]") {
+                ImageFrame img = parseImagePayloadLight(msg.payload.data(), msg.payload.size());
+                if (img.timestamp != 0) {
+                    image_buffer.push_back(std::move(img));
+                    try_sync();
+                }
             }
         }
         receiver_thread.join();

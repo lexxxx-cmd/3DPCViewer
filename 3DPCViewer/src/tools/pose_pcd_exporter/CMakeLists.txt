@@ -5,6 +5,7 @@ project(pose_pcd_exporter)
 find_package(PCL REQUIRED COMPONENTS common io filters)
 find_package(Eigen3 REQUIRED)
 find_package(cppzmq REQUIRED)
+find_package(OpenCV REQUIRED)
 
 add_executable(pose_pcd_exporter main.cpp)
 
@@ -16,6 +17,7 @@ target_include_directories(pose_pcd_exporter PRIVATE
 target_link_libraries(pose_pcd_exporter PRIVATE
     ${PCL_LIBRARIES}
     cppzmq
+    ${OpenCV_LIBRARIES}
 )
 
 # Use C++17
