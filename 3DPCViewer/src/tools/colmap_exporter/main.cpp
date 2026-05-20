@@ -239,7 +239,8 @@ ImageFrame parseImagePayload(const uint8_t* payload, size_t length, const std::s
         if (!std::filesystem::exists(save_dir)) std::filesystem::create_directories(save_dir);
 
         std::ostringstream oss;
-        oss << sec << "." << std::setfill('0') << std::setw(9) << nsec << ".jpg";
+        double time_sec = static_cast<double>(sec) + static_cast<double>(nsec) * 1e-9;
+        oss << std::fixed << std::setprecision(1) << time_sec << ".jpg";
         img_frame.filename = oss.str(); // 记录文件名
 
         std::filesystem::path filePath = std::filesystem::path(save_dir) / img_frame.filename;
@@ -362,11 +363,6 @@ int main(int argc, char** argv)
             Eigen::Matrix3d R_l2w = q_c2w.toRotationMatrix();
             Eigen::Vector3d t_l2w(odom.pose.x, odom.pose.y, odom.pose.z);
 
-            Eigen::Matrix3d R_2col;
-            R_2col << 0, -1, 0,
-                0, 0, -1,
-                1, 0, 0;
-
             Eigen::Matrix3d R_l2c;
             R_l2c << -0.005197, -0.999974, -0.004912,
                 0.574600, 0.001034, -0.818434,
@@ -379,7 +375,7 @@ int main(int argc, char** argv)
             Eigen::Matrix3d R_w2c_ros = R_l2c * R_w2l;
             Eigen::Vector3d t_w2c_ros = R_l2c * t_w2l + t_l2c;
 
-            Eigen::Matrix3d R_w2c_fpv = R_w2c_ros * R_2col.transpose();
+            Eigen::Matrix3d R_w2c_fpv = R_w2c_ros;
             Eigen::Vector3d t_w2c_fpv = t_w2c_ros;
 
             Eigen::Matrix3d R_main2fpv;
@@ -579,10 +575,10 @@ int main(int argc, char** argv)
         for (uint64_t i = 0; i < final_cloud->size(); ++i) {
             uint64_t point3d_id = i + 1;
             const auto& pt = final_cloud->points[i];
-            // 坐标转换逻辑保持不变
-            double pt_x = -pt.y;
-            double pt_y = -pt.z;
-            double pt_z = pt.x;
+
+            double pt_x = pt.x;
+            double pt_y = pt.y;
+            double pt_z = pt.z;
 
             // 写入格式：ID X Y Z R G B ERROR
             // 注意：R G B 必须转为 int，否则会输出不可见字符
