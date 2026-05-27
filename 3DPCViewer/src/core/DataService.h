@@ -45,6 +45,10 @@ class DataService : public QObject {
   void requestStoreMessage(const QString& bag_uuid, const QString& topic_name,
                            int msg_index, qint64 timestamp,
                            const QByteArray& payload);
+  void requestBatchStoreMessages(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
+                                 const QString& msg_type, const QVariantList& msg_indices, 
+                                 const QVariantList& timestamps, const QVariantList& payloads);
+  void requestFinalizeBagProcessing(int max_size);
   void requestUpdateProgress(int percent);
   void requestProcessBag(const QString& path);
   void requestProcessBin(const QString& path);

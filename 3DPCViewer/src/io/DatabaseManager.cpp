@@ -505,6 +505,11 @@ void DatabaseManager::batchInsertProcessedFrames(const QString& bag_uuid, const 
     }
 }
 
+void DatabaseManager::finalizeBagProcessing(int max_size) {
+    fetchTopicList();
+    emit messageNumReady(max_size);
+}
+
 void DatabaseManager::updateProgress(const int percent) {
     try {
         QSqlQuery topic_query(db);

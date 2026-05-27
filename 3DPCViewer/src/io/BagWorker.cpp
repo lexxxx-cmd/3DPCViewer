@@ -66,23 +66,30 @@ void BagWorker::processBag(const QString& bag_path) {
   for (auto& fut : futures) {
     auto [topic, payloads] = fut.get();
     max_size = std::max(max_size, static_cast<int>(payloads.size()));
-    std::string msg_type = topic_to_type[topic];
+    QString msg_type = QString::fromStdString(topic_to_type[topic]);
+    QString topic_name = QString::fromStdString(topic);
+
+    QVariantList msg_indices;
+    QVariantList timestamps;
+    QVariantList payload_list;
+    msg_indices.reserve(payloads.size());
+    timestamps.reserve(payloads.size());
+    payload_list.reserve(payloads.size());
 
     for (int i = 0; i < payloads.size(); ++i) {
-        QString topic_name = QString::fromStdString(topic);
-        qint64 timestamp = payloads[i].first; // Accurately parsed Bag receipt time
-
-        QByteArray payload_data(reinterpret_cast<const char*>(payloads[i].second.data()), payloads[i].second.size());
-
-        emit payloadReady(topic_name, i, timestamp, payload_data);
+        msg_indices.append(i);
+        timestamps.append(static_cast<qint64>(payloads[i].first)); // Accurately parsed Bag receipt time
+        payload_list.append(QByteArray(reinterpret_cast<const char*>(payloads[i].second.data()), payloads[i].second.size()));
     }
+
+    emit payloadsBatchReady(bag_uuid, topic_name, msg_type, msg_indices, timestamps, payload_list);
   }
 
   if (max_size == 0) {
     emit finished();
     return;
   }
-  emit messageNumReady(max_size);
+  emit batchProcessingFinished(max_size);
   emit finished();
 }
 

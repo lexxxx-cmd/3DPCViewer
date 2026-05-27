@@ -32,6 +32,7 @@ public slots:
     void batchInsertProcessedFrames(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
                                     const QString& msg_type, const QVariantList& msg_indices, 
                                     const QVariantList& timestamps, const QVariantList& payloads);
+    void finalizeBagProcessing(int max_size);
     void setCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
     void setCurrentOrigin(const QString& origin_name);
 

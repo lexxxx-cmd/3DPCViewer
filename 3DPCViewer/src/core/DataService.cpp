@@ -24,7 +24,6 @@ DataService::DataService(QObject* parent) : QObject(parent) {
   connect(bag_worker, &BagWorker::imageFrameReady, this, &DataService::imageFrameReady);
   connect(bag_worker, &BagWorker::odomFrameReady, this, &DataService::odomFrameReady);
   connect(bag_worker, &BagWorker::progressUpdated, this, &DataService::progressUpdated);
-  connect(bag_worker, &BagWorker::messageNumReady, this, &DataService::messageNumReady);
 
   // DatabaseManager is now the source of truth for the topic list
   connect(db_manager, &DatabaseManager::topicListReady, this, &DataService::topicListReady);
@@ -36,19 +35,18 @@ DataService::DataService(QObject* parent) : QObject(parent) {
       const QString& bag_uuid, const QString& topic_name, 
       const QString& msg_type) {
     current_bag_uuid = bag_uuid;
-    emit requestInsertTopic(bag_uuid, topic_name, msg_type);
   });
 
-  // When bag processing tells us message numbers, it means extraction and DB inserts are mostly done.
-  connect(bag_worker, &BagWorker::messageNumReady, this, [this](int num){
-    emit requestFetchTopicList();
+  connect(bag_worker, &BagWorker::batchProcessingFinished, this, [this](int max_size){
+    emit requestFinalizeBagProcessing(max_size);
   });
 
   connect(db_manager, &DatabaseManager::payloadReady, bag_worker, &BagWorker::updateProgress);
-  connect(bag_worker, &BagWorker::payloadReady, this, [this](
-      const QString& topic_name, int msg_index, qint64 timestamp, 
-      const QByteArray& payload) {
-    emit requestStoreMessage(current_bag_uuid, topic_name, msg_index, timestamp, payload);
+  connect(bag_worker, &BagWorker::payloadsBatchReady, this, [this](
+      const QString& bag_uuid, const QString& topic_name, const QString& msg_type, 
+      const QVariantList& msg_indices, const QVariantList& timestamps, 
+      const QVariantList& payloads) {
+    emit requestBatchStoreMessages(bag_uuid, "raw", topic_name, msg_type, msg_indices, timestamps, payloads);
   });
 
   // Connect internal signals to worker slots (replacing invokeMethod)
@@ -59,6 +57,10 @@ DataService::DataService(QObject* parent) : QObject(parent) {
           &DatabaseManager::exportColmapStreamAll, Qt::QueuedConnection);
   connect(this, &DataService::requestInsertTopic, db_manager,
           &DatabaseManager::insertTopic, Qt::QueuedConnection);
+  connect(this, &DataService::requestBatchStoreMessages, db_manager,
+          &DatabaseManager::batchInsertProcessedFrames, Qt::QueuedConnection);
+  connect(this, &DataService::requestFinalizeBagProcessing, db_manager,
+          &DatabaseManager::finalizeBagProcessing, Qt::QueuedConnection);
   connect(this, &DataService::requestStoreMessage, db_manager,
           &DatabaseManager::storeMessage, Qt::QueuedConnection);
   connect(this, &DataService::requestUpdateProgress, db_manager,
