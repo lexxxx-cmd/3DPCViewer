@@ -309,7 +309,7 @@ int main(int argc, char** argv)
 
         PointCloud::Ptr global_cloud(new PointCloud());
         PointCloud::Ptr temp_downsampled_cloud(new PointCloud());
-        float voxel_size = 0.05f;
+        float voxel_size = 0.01f;
         pcl::VoxelGrid<PointT> vg;
         vg.setLeafSize(voxel_size, voxel_size, voxel_size);
         const int32_t camera_id = 1;
@@ -519,35 +519,16 @@ int main(int argc, char** argv)
         std::cout << "image: " << img_count;
         receiver_thread.join();
 
-        // Final global downsample with adaptive voxel size to hit ~100MB target
+        // Final global downsample
         PointCloud::Ptr final_cloud(new PointCloud());
         pcl::VoxelGrid<PointT> vg_global;
         vg_global.setInputCloud(global_cloud);
 
         float final_voxel_size = voxel_size;
-        // 51 bytes per point in points3D.bin (uint64 + 3x double + 3x uint8 + double + uint64)
-        // 2,000,000 points * 51 bytes ~= 102 MB
-        const size_t TARGET_POINTS = 2000000;
 
         vg_global.setLeafSize(final_voxel_size, final_voxel_size, final_voxel_size);
         vg_global.filter(*final_cloud);
 
-        // Iteratively increase voxel size until the point count drops below the target
-        while (final_cloud->size() > TARGET_POINTS) {
-            final_voxel_size += 0.05f;
-            std::cout << "[ColmapExporter] Global cloud size: " << final_cloud->size()
-                << " | Target: " << TARGET_POINTS
-                << " | Increasing voxel size to " << final_voxel_size << "m..." << std::endl;
-
-            vg_global.setLeafSize(final_voxel_size, final_voxel_size, final_voxel_size);
-            vg_global.filter(*final_cloud);
-
-            // Fail-safe to avoid infinite loops if cloud doesn't shrink (e.g. huge voxel size limits)
-            if (final_voxel_size > 2.0f) {
-                std::cout << "[ColmapExporter] Voxel size reached 2.0m, stopping adaptive downsample." << std::endl;
-                break;
-            }
-        }
         pcl::io::savePCDFileBinary(
             "debug_cloud.pcd",
             *final_cloud);
