@@ -2,6 +2,7 @@
 
 #include <QtWidgets/QMainWindow>
 #include <memory>
+#include "io/BagDataTypes.h"
 #include "ui_PCViewer.h"
 #include "ui/ControlPanelWidget.h"
 #include "ui/VisualAreaWidget.h"
@@ -25,6 +26,7 @@ class PCViewer : public QMainWindow {
  signals:
   void requestLoadFile(const QString& path);
   void requestProcessBag(const QString& path);
+  void requestProcessBin(const QString& bin_path);
   void requestUpdateFileSize(const int& size);
   void requestUpdateFps(const int& fps);
   void requestShowNormals(const bool& show);
@@ -35,12 +37,16 @@ class PCViewer : public QMainWindow {
   void cloudFrameReady(const GeneralCloudFrame& frame);
   void imageFrameReady(const ImageFrame& frame);
   void odomFrameReady(const OdomFrame& frame);
-  void topicListReady(const std::vector<std::string>& topics);
+  void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
 
   void progressUpdated(const int value);
 
   void errorOccurred(const QString& error_msg);
+  void requestRunSlam(const QString& algorithm, bool is_rt_preview);
+  void requestExportColmap();
+  void requestExportPosePcd();
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
 
  private:
   std::unique_ptr<Ui::PCViewerClass> ui;

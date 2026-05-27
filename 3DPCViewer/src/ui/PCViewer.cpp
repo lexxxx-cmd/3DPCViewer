@@ -7,6 +7,8 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
  
   connect(ui->ControlWidget, &ControlPanelWidget::requestProcessBag, this,
           &PCViewer::requestProcessBag);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestProcessBin, this,
+      &PCViewer::requestProcessBin);
   connect(ui->ControlWidget, &ControlPanelWidget::requestProcessBag, ui->ShowWidget,
           [this]() { ui->ShowWidget->clear(); });
   connect(ui->ControlWidget, &ControlPanelWidget::progressUpdated, this,
@@ -32,6 +34,14 @@ PCViewer::PCViewer(QWidget* parent) : QMainWindow(parent) {
           &VisualAreaWidget::onChangeOpacityRequested);
   connect(ui->ControlWidget, &ControlPanelWidget::bgColorChanged, ui->ShowWidget,
           &VisualAreaWidget::onChangeBgColorRequested);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestRunSlam, this,
+          &PCViewer::requestRunSlam);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestExportColmap, this,
+          &PCViewer::requestExportColmap);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestExportPosePcd, this,
+          &PCViewer::requestExportPosePcd);
+  connect(ui->ControlWidget, &ControlPanelWidget::requestSetCurrentDataSource, this,
+          &PCViewer::requestSetCurrentDataSource);
 }
 
 PCViewer::~PCViewer() = default;

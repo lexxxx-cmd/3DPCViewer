@@ -16,6 +16,17 @@ DataWidget::DataWidget(QWidget* parent) : QWidget(parent) {
     ui->lbl_filesize->setText(QString::number(info.size() / 1024 / 1024));
     emit requestProcessBag(file_name);
   });
+  connect(ui->pB_import_bin, &QPushButton::clicked, this, [this]() {
+      QString file_name = QFileDialog::getOpenFileName(this, "Open File", ".",
+          "Open files(*.bin *.txt)");
+
+      if (file_name.isEmpty()) return;
+      ui->lbl_filename->setText(file_name);
+
+      QFileInfo info(file_name);
+      ui->lbl_filesize->setText(QString::number(info.size() / 1024 / 1024));
+      emit requestProcessBin(file_name);
+      });
 }
 
 DataWidget::~DataWidget() = default;

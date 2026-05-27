@@ -34,6 +34,12 @@
 
 #include "messages/messages.h"
 
+inline int64_t parseRosTime(const char* ptr) {
+    uint32_t secs = *reinterpret_cast<const uint32_t*>(ptr);
+    uint32_t nsecs = *reinterpret_cast<const uint32_t*>(ptr + 4);
+    return static_cast<int64_t>(secs) * 1000000000LL + nsecs;
+}
+
 using FieldValMap =
         std::map<std::string, std::pair<std::shared_ptr<char[]>, int>>;
 
@@ -199,7 +205,7 @@ void Rosbag::readConnectionRecord() {
 
 void Rosbag::readMessageDataRecord() {
     auto conn_id = *reinterpret_cast<int *>(fields_["conn"].first.get());
-    auto time = *reinterpret_cast<int64_t *>(fields_["time"].first.get());
+    auto time = parseRosTime(fields_["time"].first.get());
 
     int data_len = 0;
     rosbag_.read(reinterpret_cast<char *>(&data_len), 4);
@@ -216,10 +222,8 @@ void Rosbag::readChunkInfoRecord() {
         ChunkInfo info{};
         info.chunk_pos =
                 *reinterpret_cast<int64_t *>(fields_["chunk_pos"].first.get());
-        info.start_time = *reinterpret_cast<int64_t *>(
-                fields_["start_time"].first.get());
-        info.end_time =
-                *reinterpret_cast<int64_t *>(fields_["end_time"].first.get());
+        info.start_time = parseRosTime(fields_["start_time"].first.get());
+        info.end_time = parseRosTime(fields_["end_time"].first.get());
         info.conn_count =
                 *reinterpret_cast<int *>(fields_["count"].first.get());
 
@@ -352,8 +356,8 @@ void Rosbag::saveLaserScanAsPLY(
                   });
 }
 
-std::vector<std::vector<uint8_t>> Rosbag::getRawPayloads(const std::string& topic_name) {
-    std::vector<std::vector<uint8_t>> payloads;
+std::vector<std::pair<int64_t, std::vector<uint8_t>>> Rosbag::getRawPayloads(const std::string& topic_name) {
+    std::vector<std::pair<int64_t, std::vector<uint8_t>>> payloads;
     if (topic_to_conn_id_.find(topic_name) == topic_to_conn_id_.cend()) {
         return payloads;
     }
@@ -401,7 +405,7 @@ std::vector<std::vector<uint8_t>> Rosbag::getRawPayloads(const std::string& topi
                 local_stream.seekg(msg_info.buffer_offset);
                 local_stream.read(reinterpret_cast<char*>(buf.data()),
                                   msg_info.data_len);
-                payloads[i] = std::move(buf);
+                payloads[i] = std::make_pair(msg_info.time, std::move(buf));
             }
         });
     }

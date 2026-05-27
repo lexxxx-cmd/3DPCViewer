@@ -4,6 +4,7 @@
 #include <QString>
 #include <unordered_map>
 #include <atomic>
+#include <QVariantList>
 #include "BagDataTypes.h"
 
 class BagWorker : public QObject {
@@ -15,6 +16,7 @@ class BagWorker : public QObject {
 
  public slots:
   void processBag(const QString& bag_path);
+  void processBin(const QString& bag_path);
   void updateProgress(const QString& topic_name, const int percent, const QByteArray& payload_data);
   void stopProcessing();
 
@@ -23,16 +25,16 @@ class BagWorker : public QObject {
   void imageFrameReady(const ImageFrame& frame);
   void odomFrameReady(const OdomFrame& frame);
   void progressUpdated(int percent);
-  void topicListReady(const std::vector<std::string>& topics);
-  void messageNumReady(int num);
   void errorOccurred(const QString& error_msg);
   void finished();
   
   void topicInfoReady(const QString& bag_uuid, const QString& topic_name, 
                       const QString& msg_type);
-  void payloadReady(const QString& topic_name, int msg_index, qint64 timestamp, 
-                    const QByteArray& payload);
+  void payloadsBatchReady(const QString& bag_uuid, const QString& topic_name, const QString& msg_type, 
+                          const QVariantList& msg_indices, const QVariantList& timestamps, 
+                          const QVariantList& payloads);
   void requestPayload(const QString& topic_name, int msg_index);
+  void batchProcessingFinished(int max_size);
 
  private:
   std::atomic<bool> stop_flag;

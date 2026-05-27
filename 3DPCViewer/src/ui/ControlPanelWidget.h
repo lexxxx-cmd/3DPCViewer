@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <memory>
 #include <QColor>
+#include "io/BagDataTypes.h"
 #include "ui_ControlPanelWidget.h"
 #include "ui/DataWidget.h"
 #include "ui/StatusWidget.h"
@@ -28,21 +29,21 @@ class ControlPanelWidget : public QWidget {
   void onPointSizeUpdated(const int& num);
 
  signals:
-  void requestLoadFile(const QString& path);
   void requestProcessBag(const QString& path);
+  void requestProcessBin(const QString& bin_path);
   void requestUpdateFileSize(const int& size);
   void requestUpdatePointSize(const int& num);
-  void requestUpdateFps(const int& fps);
-  void requestShowNormals(const bool& show);
-
-  void pointSizeChanged(const int& value);
-  void pointOpacityChanged(const int& value);
-  void bgColorChanged(const QColor& color);
-
-  void topicListReady(const std::vector<std::string>& topics);
+  void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
-  void progressUpdated(const int value);
   void imageFrameReady(const ImageFrame& frame);
+  void progressUpdated(int percent);
+  void pointSizeChanged(const int& size);
+  void pointOpacityChanged(const int& opacity);
+  void bgColorChanged(const QColor& color);
+  void requestRunSlam(const QString& algorithm, bool is_rt_preview);
+  void requestExportColmap();
+  void requestExportPosePcd();
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
 
  private:
   std::unique_ptr<Ui::ControlPanelWidgetClass> ui;

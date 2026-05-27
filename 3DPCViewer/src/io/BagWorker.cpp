@@ -3,9 +3,22 @@
 #include <QDebug>
 #include <QImage>
 #include <QUuid>
+#include <QFileInfo>
 #include <execution>
 #include <future>
 #include <numeric>
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+
+template <typename T>
+void ReadBinaryLittleEndian(std::istream* stream, T* data) {
+    stream->read(reinterpret_cast<char*>(data), sizeof(T));
+}
 
 BagWorker::BagWorker(QObject* parent) : QObject(parent), stop_flag(false) {}
 
@@ -23,20 +36,20 @@ void BagWorker::processBag(const QString& bag_path) {
   Rosbag bag(bag_path.toStdString());
   std::vector<std::string> topic_list = bag.getAvailableTopics();
   std::vector<std::string> type_list = bag.getAvailableTypes();
+  std::unordered_map<std::string, std::string> topic_to_type;
 
-  emit topicListReady(topic_list);
-  
   QString bag_uuid = generateUUID();
 
   for (int i = 0; i < topic_list.size(); i++) {
     std::string topic = topic_list[i];
     std::string msg_type = type_list[i];
-    
+    topic_to_type[topic] = msg_type;
+
     emit topicInfoReady(bag_uuid, QString::fromStdString(topic), QString::fromStdString(msg_type));
   }
 
   const std::string path_str = bag_path.toStdString();
-  using TopicPayloads = std::pair<std::string, std::vector<std::vector<uint8_t>>>;
+  using TopicPayloads = std::pair<std::string, std::vector<std::pair<int64_t, std::vector<uint8_t>>>>;
   std::vector<std::future<TopicPayloads>> futures;
   futures.reserve(topic_list.size());
 
@@ -53,22 +66,259 @@ void BagWorker::processBag(const QString& bag_path) {
   for (auto& fut : futures) {
     auto [topic, payloads] = fut.get();
     max_size = std::max(max_size, static_cast<int>(payloads.size()));
+    QString msg_type = QString::fromStdString(topic_to_type[topic]);
+    QString topic_name = QString::fromStdString(topic);
+
+    QVariantList msg_indices;
+    QVariantList timestamps;
+    QVariantList payload_list;
+    msg_indices.reserve(payloads.size());
+    timestamps.reserve(payloads.size());
+    payload_list.reserve(payloads.size());
+
     for (int i = 0; i < payloads.size(); ++i) {
-        QString topic_name = QString::fromStdString(topic);
-        qint64 timestamp = 0;
-
-        QByteArray payload_data(reinterpret_cast<const char*>(payloads[i].data()), payloads[i].size());
-
-        emit payloadReady(topic_name, i, timestamp, payload_data);
+        msg_indices.append(i);
+        timestamps.append(static_cast<qint64>(payloads[i].first)); // Accurately parsed Bag receipt time
+        payload_list.append(QByteArray(reinterpret_cast<const char*>(payloads[i].second.data()), payloads[i].second.size()));
     }
+
+    emit payloadsBatchReady(bag_uuid, topic_name, msg_type, msg_indices, timestamps, payload_list);
   }
 
   if (max_size == 0) {
     emit finished();
     return;
   }
-  emit messageNumReady(max_size);
+  emit batchProcessingFinished(max_size);
   emit finished();
+}
+
+
+
+void BagWorker::processBin(const QString& bin_path) {
+    std::ifstream file(bin_path.toStdString(), std::ios::binary);
+    if (!file.is_open()) {
+        // 修复中文乱码
+        std::cerr << "无法打开文件: " << bin_path.toStdString() << std::endl;
+        return;
+    }
+
+    QFileInfo fileInfo(bin_path);
+    QString fileName = fileInfo.fileName();
+    QString suffix = fileInfo.suffix();
+
+    if (fileName.startsWith("images")) {
+        Eigen::Matrix3d Rx_m90;
+        Rx_m90 << 1, 0, 0,
+            0, 0, 1,
+            0, -1, 0;
+        if (suffix == "bin") {
+            uint64_t num_images;
+            ReadBinaryLittleEndian(&file, &num_images);
+            std::cout << "images.bin: " << num_images << std::endl;
+            for (size_t i = 0; i < num_images; ++i) {
+                uint32_t image_id;
+                ReadBinaryLittleEndian(&file, &image_id);
+
+                double qw, qx, qy, qz, tx, ty, tz;
+                ReadBinaryLittleEndian(&file, &qw);
+                ReadBinaryLittleEndian(&file, &qx);
+                ReadBinaryLittleEndian(&file, &qy);
+                ReadBinaryLittleEndian(&file, &qz);
+                ReadBinaryLittleEndian(&file, &tx);
+                ReadBinaryLittleEndian(&file, &ty);
+                ReadBinaryLittleEndian(&file, &tz);
+
+                uint32_t camera_id;
+                ReadBinaryLittleEndian(&file, &camera_id);
+
+                // 读取字符串 (小优化：虽然还是单字符循环，但预先分配避免频繁扩容)
+                std::string name;
+                name.reserve(64);
+                char name_char;
+                while (file.read(&name_char, 1) && name_char != '\0') {
+                    name += name_char;
+                }
+
+                // --- 核心变换逻辑 ---
+                Eigen::Quaterniond q(qw, qx, qy, qz);
+                Eigen::Matrix3d R = q.toRotationMatrix();
+                Eigen::Vector3d t(tx, ty, tz);
+
+                // 1. 获取 COLMAP 坐标系下的 C2W 位置
+                Eigen::Vector3d camera_center = -R.transpose() * t;
+
+                // 2. 将位置转换到 ros 坐标系
+                Eigen::Vector3d camera_center_osg = Rx_m90 * camera_center;
+
+                // 3. 将姿态转换到 OSG 坐标系
+                // 原始 R.transpose() 是 COLMAP 坐标系下的 C2W 旋转
+                // 左乘 Rx_m90 代表在新的世界坐标系下描述该相机的朝向
+                Eigen::Matrix3d R_osg = Rx_m90 * R.transpose();
+                Eigen::Quaterniond q_osg(R_osg);
+
+                // 跳过 2D 点数据
+                uint64_t num_points2D;
+                ReadBinaryLittleEndian(&file, &num_points2D);
+                file.seekg(num_points2D * 24, std::ios::cur);
+
+                // 封装数据 (统一使用转换后的 osg 变量)
+                OdomFrame Frame;
+                Frame.timestamp = i; // 或者 image_id
+                Frame.index = i;
+                Frame.pose.qw = q_osg.w();
+                Frame.pose.qx = q_osg.x();
+                Frame.pose.qy = q_osg.y();
+                Frame.pose.qz = q_osg.z();
+                Frame.pose.x = camera_center_osg.x();
+                Frame.pose.y = camera_center_osg.y();
+                Frame.pose.z = camera_center_osg.z();
+                emit odomFrameReady(Frame);
+            }
+        }
+        else if (suffix == "txt") {
+            std::ifstream file(bin_path.toStdString());
+            if (!file.is_open()) {
+                std::cerr << "无法打开文件: " << bin_path.toStdString() << std::endl;
+                return;
+            }
+
+            std::string line;
+            size_t frame_index = 0;
+
+            while (std::getline(file, line)) {
+                // 跳过空行和注释
+                if (line.empty() || line[0] == '#') continue;
+
+                // --- 1. 读取当前行：位姿信息 ---
+                std::istringstream iss(line);
+                uint32_t image_id, camera_id;
+                double qw, qx, qy, qz, tx, ty, tz;
+                std::string name;
+
+                iss >> image_id >> qw >> qx >> qy >> qz >> tx >> ty >> tz >> camera_id >> name;
+
+                // --- 核心变换逻辑 (同 bin) ---
+                Eigen::Quaterniond q(qw, qx, qy, qz);
+                Eigen::Matrix3d R = q.toRotationMatrix();
+                Eigen::Vector3d t(tx, ty, tz);
+
+                Eigen::Vector3d camera_center = -R.transpose() * t;
+                Eigen::Vector3d camera_center_osg = Rx_m90 * camera_center;
+                Eigen::Matrix3d R_osg = Rx_m90 * R.transpose();
+                Eigen::Quaterniond q_osg(R_osg);
+
+                // 封装数据
+                OdomFrame Frame;
+                Frame.timestamp = frame_index;
+                Frame.index = frame_index++;
+                Frame.pose.qw = q_osg.w();
+                Frame.pose.qx = q_osg.x();
+                Frame.pose.qy = q_osg.y();
+                Frame.pose.qz = q_osg.z();
+                Frame.pose.x = camera_center_osg.x();
+                Frame.pose.y = camera_center_osg.y();
+                Frame.pose.z = camera_center_osg.z();
+                emit odomFrameReady(Frame);
+
+                // --- 2. 读取并跳过下一行：2D点数据 ---
+                if (std::getline(file, line)) {
+                    // 这一行是 2D points 数据，直接忽略即可
+                }
+            }
+        }
+        
+    }
+    else if (fileName.startsWith("points3D")) {
+        if (suffix == "bin") {
+            uint64_t num_points3D;
+            ReadBinaryLittleEndian(&file, &num_points3D);
+            std::cout << "正在处理 points3D.bin, 总点数: " << num_points3D << std::endl;
+
+            GeneralCloudFrame Frame;
+            Frame.points.resize(num_points3D);
+            Frame.frame_id = "1";
+            Frame.timestamp = 1;
+
+            for (size_t i = 0; i < num_points3D; ++i) {
+                uint64_t point3D_id;
+                ReadBinaryLittleEndian(&file, &point3D_id);
+
+                double x, y, z;
+                ReadBinaryLittleEndian(&file, &x);
+                ReadBinaryLittleEndian(&file, &y);
+                ReadBinaryLittleEndian(&file, &z);
+
+                uint8_t r, g, b;
+                ReadBinaryLittleEndian(&file, &r);
+                ReadBinaryLittleEndian(&file, &g);
+                ReadBinaryLittleEndian(&file, &b);
+
+                double error;
+                ReadBinaryLittleEndian(&file, &error);
+
+                uint64_t track_len;
+                ReadBinaryLittleEndian(&file, &track_len);
+                file.seekg(track_len * 8, std::ios::cur);
+
+                // COLMAP坐标系 -> OSG坐标系: 绕X轴旋转-90度
+                Frame.points[i].point_i.x = static_cast<float>(x);
+                Frame.points[i].point_i.y = static_cast<float>(z);
+                Frame.points[i].point_i.z = -static_cast<float>(y);
+                Frame.points[i].r = r;
+                Frame.points[i].g = g;
+                Frame.points[i].b = b;
+            }
+
+            emit cloudFrameReady(Frame);
+        }
+        else if (suffix == "txt") {
+            std::ifstream file_txt(bin_path.toStdString());
+            if (!file_txt.is_open()) {
+                std::cerr << "无法打开文件: " << bin_path.toStdString() << std::endl;
+                return;
+            }
+
+            GeneralCloudFrame Frame;
+            Frame.frame_id = "1";
+            Frame.timestamp = 1;
+
+            std::string line;
+            while (std::getline(file_txt, line)) {
+                // 跳过空行和注释行
+                if (line.empty() || line[0] == '#') continue;
+
+                std::istringstream iss(line);
+                uint64_t point3D_id;
+                double x, y, z;
+                int r, g, b; // 注意：使用 int 接收 RGB，如果用 uint8_t stream 会将其解析为单个 char 字符
+                double error;
+
+                // 读取核心数据 (剩余的 Track 列表数据直接丢弃，不读取即可)
+                iss >> point3D_id >> x >> y >> z >> r >> g >> b >> error;
+
+                // 新建一个点并放入 Frame
+                Frame.points.push_back({});
+                auto& pt = Frame.points.back();
+
+                // COLMAP坐标系 -> OSG坐标系: 绕X轴旋转-90度
+                pt.point_i.x = static_cast<float>(x);
+                pt.point_i.y = static_cast<float>(z);
+                pt.point_i.z = -static_cast<float>(y);
+
+                // 转回 uint8_t
+                pt.r = static_cast<uint8_t>(r);
+                pt.g = static_cast<uint8_t>(g);
+                pt.b = static_cast<uint8_t>(b);
+            }
+
+            std::cout << "正在处理 points3D.txt, 总点数: " << Frame.points.size() << std::endl;
+            emit cloudFrameReady(Frame);
+        }
+    }
+
+    file.close();
+    emit finished();
 }
 
 void BagWorker::updateProgress(const QString& topic_name, const int percent, const QByteArray& payload_data) {

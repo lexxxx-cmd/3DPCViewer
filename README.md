@@ -45,6 +45,8 @@ cd ..
 # 安装OpenSceneGraph
 vcpkg install osg
 # 安装PCL
+# 安装ZMQ
+vcpkg install cppzmq
 ```
 
 ## 构建步骤

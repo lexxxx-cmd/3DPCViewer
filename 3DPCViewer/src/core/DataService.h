@@ -18,6 +18,7 @@ class DataService : public QObject {
 
  public slots:
   void startProcess(const QString& path);
+  void startProcessBin(const QString& path);
   void updateProgress(const int value);
   void stopProcess();
 
@@ -26,20 +27,31 @@ class DataService : public QObject {
   void imageFrameReady(const ImageFrame& frame);
   void odomFrameReady(const OdomFrame& frame);
   void progressUpdated(int percent);
-  void topicListReady(const std::vector<std::string>& topics);
+  void topicListReady(const TopicTreeData& topics);
   void messageNumReady(int num);
+  void nextSlamFrameReady(const QString& topic, const QByteArray& payload, qint64 timestamp);
+  void slamStreamFinished();
   void errorOccurred(const QString& error_msg);
   void finished();
 
   // Internal signals for cross-thread communication (replacing invokeMethod)
   void requestInitializeDb(const QString& bag_path);
+  void requestExportColmapStream(const QString& bag_uuid, const QString& origin_name, int zmq_port);
+  void requestFetchNextSlamFrame();
+  void requestFetchTopicList();
   void requestInsertTopic(const QString& bag_uuid, const QString& topic_name,
                           const QString& msg_type);
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
   void requestStoreMessage(const QString& bag_uuid, const QString& topic_name,
                            int msg_index, qint64 timestamp,
                            const QByteArray& payload);
+  void requestBatchStoreMessages(const QString& bag_uuid, const QString& origin_name, const QString& topic_name, 
+                                 const QString& msg_type, const QVariantList& msg_indices, 
+                                 const QVariantList& timestamps, const QVariantList& payloads);
+  void requestFinalizeBagProcessing(int max_size);
   void requestUpdateProgress(int percent);
   void requestProcessBag(const QString& path);
+  void requestProcessBin(const QString& path);
 
  private:
   BagWorker* bag_worker;

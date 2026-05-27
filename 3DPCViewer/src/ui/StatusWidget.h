@@ -3,6 +3,9 @@
 #include <QWidget>
 #include <memory>
 #include <QStandardItemModel>
+#include <QMap>
+#include <QStringList>
+#include "io/BagDataTypes.h"
 #include "ui_StatusWidget.h"
 
 QT_BEGIN_NAMESPACE
@@ -17,8 +20,14 @@ class StatusWidget : public QWidget {
   ~StatusWidget();
 
  public slots:
-  void onUpdateTopicList(const std::vector<std::string>& topics);
+  void onUpdateTopicList(const TopicTreeData& topics);
   void onTopicStateChanged(QStandardItem* item);
+
+  public:
+   bool checkColmapExportConditions(QString& out_bag_uuid, QString& out_origin_name);
+
+ signals:
+  void requestSetCurrentDataSource(const QString& bag_uuid, const QString& origin_name);
 
  private:
   std::unique_ptr<Ui::StatusWidgetClass> ui;

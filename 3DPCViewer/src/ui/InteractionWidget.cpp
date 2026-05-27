@@ -32,8 +32,9 @@ InteractionWidget::InteractionWidget(QWidget* parent) : QWidget(parent) {
   connect(ui->HSlider_opacity, &QSlider::valueChanged,
       this, &InteractionWidget::onOpacitySliderChanged);
 
+  constexpr int kDefaultTimerIntervalMs = 100;
   timer = new QTimer(this);
-  timer->setInterval(100);
+  timer->setInterval(kDefaultTimerIntervalMs);
 
   connect(timer, &QTimer::timeout, this, [this]() {
     if (cur_message_num < max_message_num) {
@@ -84,6 +85,26 @@ InteractionWidget::InteractionWidget(QWidget* parent) : QWidget(parent) {
     emit bgColorChanged(color);
   });
 
+  if (ui->pB_run_slam) {
+    connect(ui->pB_run_slam, &QPushButton::clicked, this, [this]() {
+      QString algo = ui->cbx_slam->currentText();
+      bool rt_preview = ui->rb_rt_preview->isChecked();
+      emit requestRunSlam(algo, rt_preview);
+    });
+  }
+
+  if (ui->pB_export_cmp) {
+    connect(ui->pB_export_cmp, &QPushButton::clicked, this, [this]() {
+      emit requestExportColmap();
+    });
+  }
+
+  if (ui->pB_export_lvba) {
+    connect(ui->pB_export_lvba, &QPushButton::clicked, this, [this]() {
+      emit requestExportPosePcd();
+    });
+  }
+
   onSizeSliderChanged(ui->HSlider_size->value());
   onOpacitySliderChanged(ui->HSlider_opacity->value());
 }
@@ -102,10 +123,23 @@ void InteractionWidget::onOpacitySliderChanged(int value) {
 
 void InteractionWidget::onMaxMessageNumSet(int value) {
   max_message_num = value;
+
+  if (timer->isActive()) {
+    timer->stop();
+    is_play = false;
+    ui->pB_play_pause->setText("Play");
+  }
+
+  ui->HSlider_progress->setValue(0);
+
   if (max_message_num > 0) {
     ui->pB_play_pause->setEnabled(true);
     ui->pB_forward->setEnabled(true);
+  } else {
+    ui->pB_play_pause->setEnabled(false);
+    ui->pB_forward->setEnabled(false);
   }
+
   ui->HSlider_progress->setMaximum(max_message_num);
   ui->lbl_ProgressValue->setText(QString("%1/%2").arg(ui->HSlider_progress->value()).arg(max_message_num));
 }
